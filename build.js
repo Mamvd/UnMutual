@@ -175,7 +175,7 @@ function installerHtml(platforms) {
           <li>Open <strong>${p.host}</strong> in this browser and make sure you are <strong>logged in</strong>.</li>
           <li>Drag this button to your bookmarks bar:</li>
         </ol>
-        <p class="drag"><a class="bookmarklet" href="${p.url}" title="${p.title}">✦ &nbsp;UnMutual</a></p>
+        <p class="drag"><a class="bookmarklet" href="${p.url}" title="${p.title}">✦ &nbsp;UnMutual — ${p.label}</a></p>
         <p style="color:var(--mut);font-size:13px">…or copy the code below and paste it as the <strong>URL</strong> of a new bookmark. If pasting into the address bar strips the <code>javascript:</code> prefix (Chrome does this), use the bookmark manager instead — or just use the drag button above.</p>
         <textarea id="code-${p.id}" readonly spellcheck="false">${p.url}</textarea>
         <button class="copy" data-copy="${p.id}">Copy bookmarklet</button><span class="msg" id="msg-${p.id}"></span>
