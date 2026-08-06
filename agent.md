@@ -3,15 +3,20 @@
 Guidance for AI agents and contributors working on this codebase. Read this before
 editing anything.
 
-## What this project is
+## What this project is**UnMutual — Follower Insights** — a family of single-file browser
+**bookmarklets** (a `javascript:` URL), one per platform:
 
-**UnMutual — Instagram Follower Insights (v2.2)** — a single-file browser
-**bookmarklet** (a `javascript:` URL) that runs on `instagram.com` while the user is
-logged in. It scans the user's own **following list and followers list** via Instagram's
-read-only GraphQL endpoints, flags accounts that do not follow back ("non-followers")
+| Platform | Script | Runs on | Storage namespace |
+|---|---|---|---|
+| Instagram | `script-ig.js` (v2.2) | `instagram.com` | `unmutual.instagram.v2.*` |
+| X (Twitter) | `script-x.js` (v1.0) | `x.com` / `twitter.com` | `unmutual.x.v2.*` |
+
+Each scans the user's own **following list and followers list** via the platform's
+read-only internal API, flags accounts that do not follow back ("non-followers")
 and accounts the user doesn't follow back ("Don't follow back"), provides stats, search,
 filters, and exports — and can **unfollow accounts the user explicitly selects and
-confirms**, with strict safety rails.
+confirms**, with strict safety rails. Everything below applies to both scripts
+unless a section says otherwise.
 
 - **User-confirmed writes only** — unfollowing was added on explicit user request, and
   it is the *only* write action. It requires a confirm dialog per batch, only ever
@@ -29,17 +34,19 @@ confirms**, with strict safety rails.
 
 ## Naming (the "UnMutual" brand)
 
-**UnMutual is the brand** — the general umbrella. This script is the *Instagram*
-incarnation; other platform scripts will follow, so keep identifiers platform-neutral:
+**UnMutual is the brand** — the general umbrella. Each platform has its own script
+(the *Instagram* and *X/Twitter* incarnations), so keep identifiers platform-neutral:
 
 - **Visible branding** says `UnMutual` with a platform qualifier only where it helps
   (e.g. the hero subtitle "Instagram Follower Insights"). Never use
   "Instagram Unfollowers" anywhere.
 - **Element ids** use the short prefix `um-*` (e.g. `um-stats`, `um-results`).
 - **Window hook** is `window.__UNM_APP__` (bound once via `window.__UNM_BOUND__`).
-- **localStorage** is namespaced by platform: `unmutual.instagram.v2.*` for this
-  script; a future script must use `unmutual.<platform>.v2.*`. Old `iguf.v2.*` keys
-  are migrated automatically by `migrateStorage()` (called once at script eval).
+- **localStorage** is namespaced by platform: `unmutual.instagram.v2.*` for the
+  Instagram script and `unmutual.x.v2.*` for the X (Twitter) script (the
+  `unmutual.<platform>.v2.*` convention). Old `iguf.v2.*` keys are migrated
+  automatically by `migrateStorage()` in `script-ig.js` (called once at script eval);
+  `script-x.js` has no legacy keys and no migration.
 - **CSS classes** keep the short `ig-*` prefix (e.g. `ig-btn`) — treated as a generic
   UI class namespace shared across platform scripts, not as brand.
 
@@ -47,11 +54,13 @@ incarnation; other platform scripts will follow, so keep identifiers platform-ne
 
 | File | Role |
 |---|---|
-| `script.js` | **The entire bookmarklet source** — a single IIFE, vanilla JS, zero dependencies. This is the only runtime artifact you edit. |
-| `build.js` | Minifies `script.js` (comments/whitespace only) → URL-encodes it → writes `bookmarklet.txt` + generates `index.html` (installer page). |
-| `test.js` | Headless smoke tests: stubbed DOM/fetch/localStorage, drives the real app via `window.__UNM_APP__`. |
-| `bookmarklet.txt` | Generated — the paste-ready `javascript:` URL. Never hand-edit. Git-ignored (regenerate with `npm run build`); `index.html` is the committed artifact. |
-| `index.html` | Generated installer. Never hand-edit. |
+| `script-ig.js` | **Instagram platform script** — a single IIFE, vanilla JS, zero dependencies. |
+| `script-x.js` | **X (Twitter) platform script** — sibling of `script-ig.js`: same engine, platform-specific API layer (section 6), auth cookies and boot guard (section 15). |
+| `build.js` | Minifies each platform script (comments/whitespace only) → URL-encodes it → writes `bookmarklet-ig.txt` + `bookmarklet-x.txt` + one merged `index.html` installer (platform tabs). |
+| `test-ig.js` | Headless smoke tests for `script-ig.js` (stubbed DOM/fetch/localStorage). |
+| `test-x.js` | Headless smoke tests for `script-x.js` — same coverage, X-specific REST fixtures. |
+| `bookmarklet-ig.txt` / `bookmarklet-x.txt` | Generated — the paste-ready `javascript:` URLs. Never hand-edit. Git-ignored (regenerate with `npm run build`); `index.html` is the committed artifact. |
+| `index.html` | Generated merged installer. Never hand-edit. |
 | `README.md` | User-facing docs (features, install, safety notes). |
 | `package.json` | Dev scripts only (`build` / `test` / `check` / `verify`). No runtime dependencies. |
 | `LICENSE` | MIT license (© 2026 Mamvd). |
@@ -60,14 +69,14 @@ incarnation; other platform scripts will follow, so keep identifiers platform-ne
 ## Commands
 
 ```bash
-npm run check    # node --check script.js (syntax check)
-npm test         # node test.js — smoke tests (must pass: "N passed, 0 failed") — ALSO runs the minified build end-to-end
-npm run build    # node build.js — rebuild bookmarklet.txt + index.html; check the byte count
+npm run check    # node --check script-ig.js && node --check script-x.js (syntax check)
+npm test         # node test-ig.js && node test-x.js — smoke tests (must print "N passed, 0 failed") — each ALSO runs its minified build end-to-end
+npm run build    # node build.js — rebuild bookmarklet-ig.txt + bookmarklet-x.txt + index.html; check the byte counts
 npm run verify   # check + test + build, in sequence
 ```
 
-Run **all three** (`npm run verify`) after any change to `script.js`. Run
-`node --check test.js` / `node --check build.js` after editing those.
+Run **all three** (`npm run verify`) after any change to a platform script. Run
+`node --check test-ig.js` / `node --check test-x.js` / `node --check build.js` after editing those.
 
 ## Hard constraints — the "why"
 
@@ -79,24 +88,29 @@ Run **all three** (`npm run verify`) after any change to `script.js`. Run
 3. **Pacing policy (agreed).** Keep the strict-pacing model. Defaults are deliberately
    conservative; users can tune them in Settings, but never loosen the *safety rails*
    (caps, auto-pause) without flagging it.
-4. **Network policy.** The only external calls allowed are read-only GETs to
-   `instagram.com/graphql/…` (see `buildFollowingUrl`) and the single unfollow POST to
-   `https://www.instagram.com/web/friendships/<id>/unfollow/` (see `unfollowOne`).
-   Nothing else, ever.
+4. **Network policy.** Per platform script, the only external calls allowed are
+   read-only GETs to the platform's list endpoints (Instagram: `instagram.com/graphql/…`
+   via `buildFollowingUrl`; X/Twitter: `x.com/i/api/1.1/friendships/list.json` and
+   `followers/list.json`) and the single unfollow POST (Instagram:
+   `instagram.com/web/friendships/<id>/unfollow/`; X:
+   `x.com/i/api/1.1/friendships/destroy.json?user_id=<id>`) — see `unfollowOne`.
+   Nothing else, ever. X's GraphQL query IDs rotate, so `script-x.js` deliberately
+   uses the stable REST 1.1 endpoints; if X shuts them down, only its section 6 changes.
 5. **Security invariants:**
    - Escape **all** user-controlled data in HTML: use `esc()`; never interpolate raw.
-   - Cookies are only read (`ds_user_id` for scans, `csrftoken` for confirmed
-     unfollows), never written or stored beyond the request.
-   - localStorage keys are namespaced per platform: `unmutual.instagram.v2.*` (this
-     script). Future platform scripts must use their own `unmutual.<platform>.v2.*`
-     namespace so they never collide with each other.
+   - Cookies are only read (Instagram: `ds_user_id` / `csrftoken`; X/Twitter:
+     `auth_token` / `twid` / `ct0`), never written or stored beyond the request.
+   - localStorage keys are namespaced per platform: `unmutual.instagram.v2.*`
+     (`script.js`) and `unmutual.x.v2.*` (`script-x.js`). New platform scripts must
+     use their own `unmutual.<platform>.v2.*` namespace so they never collide with
+     each other.
    - All persistence wrapped in try/catch (bookmarklets run on pages you don't control).
 6. **Minifier constraint.** `build.js` strips comments/whitespace and understands
    string/regex literals (regex detection is char- and keyword-based: after
    `([=,:;!&|?{` or after words like `return`/`typeof`/`case`). A regex literal
    containing an unescaped `//` or `/*` will corrupt the build (or fail its parse
-   check). If you need such a pattern, escape it or update the minifier. `test.js`
-   executes the minified output, so semantic breakage is caught automatically.
+   check). If you need such a pattern, escape it or update the minifier. `test-ig.js`
+   and `test-x.js` execute the minified outputs, so semantic breakage is caught automatically.
 7. **Event routing.** UI clicks/changes go through `data-act` attributes handled by the
    `actions` object (section 13). Document-level listeners bind **once per page
    session** (`window.__UNM_BOUND__`) and must read state via
@@ -106,7 +120,15 @@ Run **all three** (`npm run verify`) after any change to `script.js`. Run
    (`state`, `actions`, `scan`, `utils`). Don't call `window.__UNM_APP__` from
    production logic for real behavior — it's the public surface for tests/debugging.
 
-## Architecture map (sections inside `script.js`)
+## Architecture map (sections inside `script-ig.js`)
+
+`script-x.js` mirrors the same section layout. Only these sections differ between
+platforms: **1** (constants: hostnames, storage keys, throttle keys, accents),
+**3** (no migration in `script-x.js`), **6** (API: URLs, headers, `getUserId` from
+the `twid` cookie, `normalizeUser`), **7** (login check uses `auth_token` + `twid`,
+REST response parsing), **7.5** (unfollow uses `ct0` + `friendships/destroy.json`),
+and **15** (boot guard + branding). Everything else — pacing, UI, analysis,
+exports, actions, event wiring — is shared verbatim.
 
 | Section | Contents |
 |---|---|
@@ -143,13 +165,13 @@ Run **all three** (`npm run verify`) after any change to `script.js`. Run
   (never guess — unknown users are excluded from the non-followers count).
 - Pagination uses `first` (24 or 50, configurable) + `after` cursor.
 
-## Testing conventions
-
-- `test.js` seeds instant pacing + high caps into the storage stub **before** the
-  script runs, so scans complete immediately.
+## Testing conventions- `test-ig.js` (Instagram) and `test-x.js` (X/Twitter) each seed instant pacing + high caps into the storage stub **before** their script runs, so scans complete
+  immediately. `test-x.js` stubs the REST endpoints (`friendships/list.json`,
+  `followers/list.json`, `friendships/destroy.json`) and the `auth_token` / `twid` /
+  `ct0` cookies.
 - The fake fetch serves pages keyed off the `after` cursor; 8 users / 3 per page.
 - Assertions read rendered output via `registry.get("um-<id>")._html`.
-- The last test executes the **minified output** (`minify(script.js)`) in a fresh VM and
+- The last test executes the **minified output** (`minify(script-ig.js)`) in a fresh VM and
   runs a scan **and an unfollow** — this is what guarantees `build.js` never changes
   semantics on any code path.
 - Unfollow tests cover: full flow, throttle + resume, non-resumable pause (login wall
@@ -161,7 +183,7 @@ Run **all three** (`npm run verify`) after any change to `script.js`. Run
   merged mutuals, and the "Don't follow back" tab.
 - The DOM stub is minimal — it only implements APIs the source actually uses
   (`getElementById`, `innerHTML`, `insertAdjacentHTML`, `appendChild`, `style`,
-  `classList`, …). If you add new DOM APIs to `script.js`, extend the stub.
+  `classList`, …). If you add new DOM APIs to `script-ig.js` / `script-x.js`, extend the stub.
 - Don't rename the `um-*` element ids used by render functions and tests without
   updating both.
 

@@ -29,8 +29,8 @@
  *   - Automatically pauses if Instagram rate-limits or challenges the request,
  *     and only resumes when you explicitly click Resume.
  *
- * Build:  node build.js   ->  bookmarklet.txt (the javascript: URL)
- * Test:   node test.js
+ * Build:  node build.js   ->  bookmarklet-ig.txt (the javascript: URL)
+ * Test:   node test-ig.js
  */
 (function () {
   "use strict";

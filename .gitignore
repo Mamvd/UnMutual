@@ -1,9 +1,10 @@
 # Dependencies
 node_modules/
 
-# Build output — regenerable via `npm run build` (bookmarklet.txt is derived
-# from script.js; index.html is the committed installer page)
-bookmarklet.txt
+# Build output — regenerable via `npm run build` (the bookmarklet .txt files
+# are derived from the platform scripts; index.html is the committed installer)
+bookmarklet-ig.txt
+bookmarklet-x.txt
 
 # Logs
 logs/

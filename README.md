@@ -1,10 +1,23 @@
-# UnMutual — Instagram Follower Insights
+# UnMutual — Follower Insights
 
-**A zero-dependency, single-file bookmarklet** that runs inside `instagram.com` while you are logged in. It scans **your** following list and **your** followers list using the same read-only GraphQL requests the Instagram web app makes, then tells you who doesn't follow you back — and lets you **unfollow only the accounts you explicitly select and confirm**, with human-like pacing and hard safety caps.
+**Zero-dependency, single-file bookmarklets** that run inside a social platform's web app while you are logged in. UnMutual scans **your** following list and **your** followers list using the same read-only internal API requests the platform's own web app makes, then tells you who doesn't follow you back — and lets you **unfollow only the accounts you explicitly select and confirm**, with human-like pacing and hard safety caps.
 
-Everything runs **100% locally in your browser**: no servers, no accounts, no third parties. The only network traffic is your own read-only requests to `instagram.com`, plus the unfollow requests you personally confirm.
+Everything runs **100% locally in your browser**: no servers, no accounts, no third parties. The only network traffic is your own read-only requests to the platform, plus the unfollow requests you personally confirm.
 
-> ⚠️ **Terms of Service.** Any automation on Instagram — even read-only scans — violates Instagram's ToS and can trigger temporary action blocks. UnMutual is deliberately conservative: capped, self-pausing, and it never unfollows without your explicit confirmation. **Use at your own risk.**
+> ⚠️ **Terms of Service.** Any automation on a social platform — even read-only scans — can violate the platform's ToS and trigger temporary action blocks. UnMutual is deliberately conservative: capped, self-pausing, and it never unfollows without your explicit confirmation. **Use at your own risk.**
+
+---
+
+## Platforms
+
+| Platform | Source script | Bookmarklet output |
+| --- | --- | --- |
+| **Instagram** | `script-ig.js` | `bookmarklet-ig.txt` |
+| **X (Twitter)** | `script-x.js` | `bookmarklet-x.txt` |
+
+Both platform scripts share the same architecture, features and safety model — only the platform API layer, auth and branding differ. `npm run build` produces both bookmarklets plus a single merged installer (`index.html`) with a platform switcher.
+
+> **Note on the X (Twitter) build:** it targets the stable internal REST 1.1 endpoints (`i/api/1.1/…`) rather than X's GraphQL query IDs, which rotate frequently. If X ever changes these endpoints, only the API section (section 6) of `script-x.js` needs updating.
 
 ---
 
@@ -41,7 +54,7 @@ Everything runs **100% locally in your browser**: no servers, no accounts, no th
 
 ## How it works
 
-The scan runs in **two phases** — following first, then followers — so each list's real count is captured and users appearing in both lists are merged by user id into a single dataset (those are your **mutuals**). The app then classifies every account:
+The scan runs in **two phases** — following first, then followers — so each list is walked and users appearing in both lists are merged by user id into a single dataset (those are your **mutuals**). The app then classifies every account:
 
 | Category | Definition |
 | --- | --- |
@@ -50,6 +63,8 @@ The scan runs in **two phases** — following first, then followers — so each 
 | **Mutuals** | You follow each other |
 | **Unknown** | The API didn't report the follow flag — never guessed, excluded from counts |
 
+> On Instagram, list totals come straight from the API; on X the REST lists don't report totals, so the Following/Followers stats reflect everything the scan has seen so far.
+
 On a **following-list** node, `follows_viewer` means *"this user follows you back"*; on a **followers-list** node, `followed_by_viewer` means *"you follow this user back"*. If a flag isn't a boolean, the account is marked **unknown** — the app never guesses.
 
 ## Install
@@ -57,21 +72,21 @@ On a **following-list** node, `follows_viewer` means *"this user follows you bac
 No dependencies, no build tools to install. You need **Node.js ≥ 14** only to (re)build.
 
 ```bash
-npm run build        # generates bookmarklet.txt + index.html
+npm run build        # generates bookmarklet-ig.txt + bookmarklet-x.txt + index.html
 ```
 
 Then:
 
-1. Open **`index.html`** in a browser.
-2. **Drag the button** to your bookmarks bar — or copy the code from the textarea and paste it as the **URL** of a new bookmark.
+1. Open **`index.html`** in a browser and pick your platform (Instagram or X/Twitter).
+2. **Drag the button** for that platform to your bookmarks bar — or copy the code from its textarea and paste it as the **URL** of a new bookmark.
    > Chrome strips `javascript:` URLs pasted into the address bar, so use the bookmark manager or the drag button.
-3. Open **instagram.com**, log in, then click the bookmark.
+3. Open the platform (instagram.com or x.com), log in, then click the bookmark.
 
 The whole app ships inside the bookmark itself — no external files, no CDNs.
 
 ## Usage
 
-1. Click the bookmarklet on an open `instagram.com` tab (you must be logged in).
+1. Click the bookmarklet on an open `instagram.com` or `x.com` tab (you must be logged in).
 2. Click **Scan** — the app walks your following and followers lists with randomized human-like pacing.
 3. Browse the tabs, search, filter and select accounts.
 4. To unfollow: select accounts (or use the per-row button) → review the breakdown in the confirm dialog → confirm. Unfollows run one at a time, paced, and stop at the daily cap. **Only what you confirm is ever unfollowed.**
@@ -88,21 +103,23 @@ Defaults are deliberately conservative; all pacing values are tunable in **Setti
 
 ## Security & privacy
 
-- Only ever contacts `instagram.com` — the read-only GraphQL endpoint for scans, and the single unfollow endpoint you trigger by confirming an unfollow. **No third parties.**
+- Only ever contacts the platform it runs on — `instagram.com` or `x.com` — for read-only list requests and the single unfollow endpoint you trigger by confirming an unfollow. **No third parties.**
 - No `eval`, `new Function`, or external scripts in the bookmarklet.
 - All user data is rendered through an HTML-escaper; nothing is interpolated unsafely.
 - Cookies are only **read** (`ds_user_id` for scans, `csrftoken` for confirmed unfollows), never written or stored beyond the request.
-- Everything is local — you can audit the entire source in `script.js`.
+- Everything is local — you can audit the entire source in `script-ig.js` / `script-x.js`.
 
 ## Project structure
 
 | File | Purpose |
 | --- | --- |
-| `script.js` | **The entire bookmarklet source** — a single IIFE, vanilla JS, zero dependencies. Edit this. |
-| `build.js` | Minifies `script.js` (comments/whitespace only) → URL-encodes it → writes `bookmarklet.txt` + generates `index.html`. |
-| `test.js` | Headless smoke tests: stubbed DOM/fetch/localStorage, drives the real app via `window.__UNM_APP__`. Also runs the minified build end-to-end. |
-| `index.html` | Generated installer page (drag-to-bookmarks). Committed so users can install without building. |
-| `bookmarklet.txt` | Generated, git-ignored, regenerable — the paste-ready `javascript:` URL. Never hand-edit. |
+| `script-ig.js` | **Instagram bookmarklet source** — a single IIFE, vanilla JS, zero dependencies. |
+| `script-x.js` | **X (Twitter) bookmarklet source** — the X sibling of `script-ig.js` (same engine, platform-specific API layer). |
+| `build.js` | Minifies each platform script (comments/whitespace only) → URL-encodes it → writes `bookmarklet-ig.txt` + `bookmarklet-x.txt` + one merged `index.html` installer. |
+| `test-ig.js` | Headless smoke tests for `script-ig.js` (stubbed DOM/fetch/localStorage). Also runs the minified build end-to-end. |
+| `test-x.js` | Headless smoke tests for `script-x.js` — same coverage with X-specific API fixtures. |
+| `index.html` | Generated installer page (platform switcher, drag-to-bookmarks). Committed so users can install without building. |
+| `bookmarklet-ig.txt` / `bookmarklet-x.txt` | Generated, git-ignored, regenerable — the paste-ready `javascript:` URLs. Never hand-edit. |
 | `agent.md` | Working guidance for AI agents and contributors (architecture map, hard constraints, conventions). |
 | `package.json` | Dev scripts only (`build` / `test` / `check` / `verify`). No runtime dependencies. |
 | `LICENSE` | MIT license (© 2026 Mamvd). |
@@ -111,17 +128,17 @@ Defaults are deliberately conservative; all pacing values are tunable in **Setti
 ## Development
 
 ```bash
-npm run check    # syntax-check script.js
-npm test         # headless smoke suite (must print "N passed, 0 failed")
-npm run build    # rebuild bookmarklet.txt + index.html; check the byte count
+npm run check    # syntax-check script-ig.js + script-x.js
+npm test         # headless smoke suites for both platforms (must print "N passed, 0 failed")
+npm run build    # rebuild bookmarklet-ig.txt + bookmarklet-x.txt + index.html; check the byte counts
 npm run verify   # all three in sequence — run before committing
 ```
 
 Notes for contributors:
 
-- `bookmarklet.txt` and `index.html` are **generated** — edit `script.js`, then run `npm run build`.
+- The `bookmarklet-*.txt` and `index.html` files are **generated** — edit the platform script, then run `npm run build`.
 - `npm test` executes the minified build output in a fresh sandbox and runs a scan **and** an unfollow, so any semantic break in the minifier is caught automatically.
-- If you add a regex containing an unescaped `//` or `/*` to `script.js`, check the minifier in `build.js`.
+- If you add a regex containing an unescaped `//` or `/*` to a platform script, check the minifier in `build.js`.
 - Full architecture map, naming conventions and hard constraints live in [`agent.md`](agent.md) — read it before editing anything.
 
 ## Version history

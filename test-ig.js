@@ -1,6 +1,6 @@
-/* test.js — headless smoke tests for the bookmarklet (script.js).
+/* test-ig.js — headless smoke tests for the Instagram bookmarklet (script-ig.js).
  *
- *   node test.js
+ *   node test-ig.js
  *
  * Stubs a minimal DOM / storage / fetch and drives the real app logic:
  * boot, scanning (following + followers), filtering, throttle handling, cancel,
@@ -12,7 +12,7 @@ const vm = require("vm");
 const fs = require("fs");
 const path = require("path");
 
-const SRC = fs.readFileSync(path.join(__dirname, "script.js"), "utf8");
+const SRC = fs.readFileSync(path.join(__dirname, "script-ig.js"), "utf8");
 const { minify } = require("./build.js");
 
 /* ---------------- minimal DOM stubs ---------------- */
