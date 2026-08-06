@@ -1,5 +1,7 @@
 # UnMutual — Follower Insights
 
+[![verify](https://github.com/Mamvd/UnMutual/actions/workflows/verify.yml/badge.svg)](https://github.com/Mamvd/UnMutual/actions/workflows/verify.yml)
+
 **Zero-dependency, single-file bookmarklets** that run inside a social platform's web app while you are logged in. UnMutual scans **your** following list and **your** followers list using the same read-only internal API requests the platform's own web app makes, then tells you who doesn't follow you back — and lets you **unfollow only the accounts you explicitly select and confirm**, with human-like pacing and hard safety caps.
 
 Everything runs **100% locally in your browser**: no servers, no accounts, no third parties. The only network traffic is your own read-only requests to the platform, plus the unfollow requests you personally confirm.
@@ -136,12 +138,15 @@ npm run verify   # all three in sequence — run before committing
 
 Notes for contributors:
 
+- **CI:** GitHub Actions runs `npm run verify` on every push and pull request (`.github/workflows/verify.yml`), and fails if the committed `index.html` has drifted from the source scripts.
 - The `bookmarklet-*.txt` and `index.html` files are **generated** — edit the platform script, then run `npm run build`.
 - `npm test` executes the minified build output in a fresh sandbox and runs a scan **and** an unfollow, so any semantic break in the minifier is caught automatically.
 - If you add a regex containing an unescaped `//` or `/*` to a platform script, check the minifier in `build.js`.
 - Full architecture map, naming conventions and hard constraints live in [`agent.md`](agent.md) — read it before editing anything.
 
 ## Version history
+
+Full release notes in [CHANGELOG.md](CHANGELOG.md).
 
 | Area | Old (v1) | New (v2) |
 | --- | --- | --- |

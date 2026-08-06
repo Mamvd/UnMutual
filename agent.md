@@ -62,6 +62,7 @@ unless a section says otherwise.
 | `bookmarklet-ig.txt` / `bookmarklet-x.txt` | Generated — the paste-ready `javascript:` URLs. Never hand-edit. Git-ignored (regenerate with `npm run build`); `index.html` is the committed artifact. |
 | `index.html` | Generated merged installer. Never hand-edit. |
 | `README.md` | User-facing docs (features, install, safety notes). |
+| `CHANGELOG.md` | Release notes per platform version. |
 | `package.json` | Dev scripts only (`build` / `test` / `check` / `verify`). No runtime dependencies. |
 | `LICENSE` | MIT license (© 2026 Mamvd). |
 | `.gitignore` | Ignore list: build output, OS/editor junk. |

@@ -1,0 +1,33 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Syntax, tests & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Zero dependencies: no npm install needed. verify = syntax-check both
+      # platform scripts, run both headless test suites (each also executes its
+      # minified build end-to-end), then rebuild the bookmarklets + installer.
+      - name: Run verify
+        run: npm run verify
+
+      # index.html is a committed build artifact — fail if it drifted from the
+      # source scripts (e.g. someone edited a platform script but forgot to build).
+      - name: Ensure generated installer is up to date
+        run: git diff --exit-code -- index.html
