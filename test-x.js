@@ -743,15 +743,28 @@ function t(name, cond, extra) {
   );
   S.settings.maxScanPages = 100;
 
-  console.log("Test: not logged in");
+  console.log("Test: not logged in (no twid cookie)");
   const savedCookie = document.cookie;
-  document.cookie = "twid=u%3D123456; ct0=tok123;";
+  // auth_token is HttpOnly and invisible to JS — the gate must be the twid cookie.
+  document.cookie = "auth_token=auth123; ct0=tok123;";
   await app.scan();
   t(
-    "not-logged-in banner shown",
+    "not-logged-in banner shown when twid missing",
     registry.get("um-banner")._html.indexOf("Not logged in") !== -1,
   );
   document.cookie = savedCookie;
+
+  console.log("Test: session without readable auth_token still scans");
+  const savedCookie3 = document.cookie;
+  document.cookie = "twid=u%3D123456; ct0=tok123;"; // no auth_token (HttpOnly anyway)
+  fetchImpl = makeGoodFetch();
+  await app.scan();
+  t(
+    "scan works via twid alone",
+    S.status === "ready" && S.users.length === TOTAL,
+    S.status + " / " + S.users.length,
+  );
+  document.cookie = savedCookie3;
 
   console.log("Test: daily cap");
   S.settings.maxScansPerDay = 0; // 0 allowed → any history today blocks

@@ -100,7 +100,8 @@ Run **all three** (`npm run verify`) after any change to a platform script. Run
 5. **Security invariants:**
    - Escape **all** user-controlled data in HTML: use `esc()`; never interpolate raw.
    - Cookies are only read (Instagram: `ds_user_id` / `csrftoken`; X/Twitter:
-     `auth_token` / `twid` / `ct0`), never written or stored beyond the request.
+     `twid` / `ct0` — `auth_token` is HttpOnly and invisible to JS, so the X
+     login check reads `twid`), never written or stored beyond the request.
    - localStorage keys are namespaced per platform: `unmutual.instagram.v2.*`
      (`script.js`) and `unmutual.x.v2.*` (`script-x.js`). New platform scripts must
      use their own `unmutual.<platform>.v2.*` namespace so they never collide with
@@ -126,7 +127,7 @@ Run **all three** (`npm run verify`) after any change to a platform script. Run
 `script-x.js` mirrors the same section layout. Only these sections differ between
 platforms: **1** (constants: hostnames, storage keys, throttle keys, accents),
 **3** (no migration in `script-x.js`), **6** (API: URLs, headers, `getUserId` from
-the `twid` cookie, `normalizeUser`), **7** (login check uses `auth_token` + `twid`,
+the `twid` cookie, `normalizeUser`), **7** (login check reads the `twid` cookie — `auth_token` is HttpOnly;
 REST response parsing), **7.5** (unfollow uses `ct0` + `friendships/destroy.json`),
 and **15** (boot guard + branding). Everything else — pacing, UI, analysis,
 exports, actions, event wiring — is shared verbatim.

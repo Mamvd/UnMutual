@@ -530,6 +530,7 @@
   function buildHeaders() {
     var h = {
       "x-twitter-active-user": "yes",
+      "x-twitter-auth-type": "OAuth2Session", // what the web app itself sends
       "x-requested-with": "XMLHttpRequest",
     };
     var csrf = getCookie("ct0");
@@ -754,20 +755,15 @@
         toast(check.reason, "error");
         return Promise.resolve();
       }
-      if (!getCookie("auth_token")) {
-        banner(
-          "error",
-          "Not logged in",
-          "Could not find your X login (auth_token cookie). Open X/Twitter, log in, then run the bookmarklet again.",
-        );
-        return Promise.resolve();
-      }
+      // X's auth_token cookie is HttpOnly — JavaScript cannot read it. The
+      // readable logged-in signal is the twid cookie, which holds your user id
+      // ("u=<id>" or URL-encoded "u%3D<id>").
       var uid = getUserId();
       if (!uid) {
         banner(
           "error",
-          "Account id not found",
-          "Could not read your X user id (twid cookie). Open X/Twitter, log in, then run the bookmarklet again.",
+          "Not logged in",
+          "Could not read your X login (the twid cookie holds your user id). Open X/Twitter, log in, then run the bookmarklet again.",
         );
         return Promise.resolve();
       }

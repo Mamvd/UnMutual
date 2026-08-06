@@ -27,8 +27,8 @@ Dates are `YYYY-MM-DD`. Format follows [Keep a Changelog](https://keepachangelog
   - **Two-list scan** (following + followers) via X's internal REST 1.1 endpoints
     (`i/api/1.1/friendships/list.json` and `followers/list.json`) — stable compared to
     X's rotating GraphQL query IDs.
-  - **Auth** from browser cookies only: `auth_token` (logged in), `twid` (your user id),
-    `ct0` (CSRF for confirmed unfollows).
+  - **Auth** from readable browser cookies only: `twid` (logged-in user id — X's
+    `auth_token` is HttpOnly and invisible to JS), and `ct0` (CSRF for confirmed unfollows).
   - **Same engine as Instagram**: stats dashboard, tabs, search & filters, selection,
     copy/export/import, and confirm-first unfollow with randomized pacing, burst/rest
     patterns, cooldowns, and hard session/daily caps.
