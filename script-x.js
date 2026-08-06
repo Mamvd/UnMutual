@@ -242,6 +242,11 @@
      web app and browser tools have used for years. If X ever shuts these down,
      only this section (6) needs to change. */
   var API_BASE = "https://x.com/i/api/1.1";
+  /* The public guest token X's own web app sends on every i/api call. It is not
+     a secret — it is hardcoded in X's web bundle — but requests without it are
+     rejected with HTTP 403. */
+  var X_GUEST_BEARER =
+    "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
 
   /* ============================================================
    * 2. Small utilities
@@ -525,17 +530,16 @@
     return t || null;
   }
 
-  /* The internal API expects the same headers the web app sends: the CSRF
-     token from the ct0 cookie plus the "active user" marker. */
+  /* The internal API expects the same headers the web app sends: the guest
+     bearer, the CSRF token from the ct0 cookie, and the session markers. */
   function buildHeaders() {
-    var h = {
+    return {
+      authorization: "Bearer " + X_GUEST_BEARER,
+      "x-csrf-token": getCookie("ct0") || "",
       "x-twitter-active-user": "yes",
-      "x-twitter-auth-type": "OAuth2Session", // what the web app itself sends
+      "x-twitter-auth-type": "OAuth2Session",
       "x-requested-with": "XMLHttpRequest",
     };
-    var csrf = getCookie("ct0");
-    if (csrf) h["x-csrf-token"] = csrf;
-    return h;
   }
 
   function buildListUrl(list, userId, cursor) {
@@ -1042,6 +1046,8 @@
         error: "ct0 cookie is missing — log in to X and try again",
       });
     }
+    var headers = buildHeaders();
+    headers["content-type"] = "application/x-www-form-urlencoded";
     return fetch(
       API_BASE +
         "/friendships/destroy.json?user_id=" +
@@ -1050,10 +1056,7 @@
         method: "POST",
         mode: "cors",
         credentials: "include",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          "x-csrf-token": csrf,
-        },
+        headers: headers,
       },
     )
       .then(function (resp) {
