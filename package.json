@@ -1,0 +1,33 @@
+{
+  "name": "unmutual",
+  "version": "2.2.0",
+  "description": "UnMutual — Instagram Follower Insights: a zero-dependency bookmarklet that scans your following and followers lists on instagram.com, flags non-followers / don't-follow-back / mutuals, and lets you unfollow only the accounts you explicitly select and confirm.",
+  "private": true,
+  "license": "MIT",
+  "keywords": [
+    "bookmarklet",
+    "instagram",
+    "followers",
+    "non-followers",
+    "unfollow",
+    "privacy",
+    "vanilla-js"
+  ],
+  "scripts": {
+    "check": "node --check script.js",
+    "test": "node test.js",
+    "build": "node build.js",
+    "verify": "node --check script.js && node test.js && node build.js"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "files": [
+    "script.js",
+    "build.js",
+    "test.js",
+    "README.md",
+    "agent.md",
+    "index.html"
+  ]
+}
