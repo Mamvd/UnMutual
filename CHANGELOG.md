@@ -24,6 +24,16 @@ Dates are `YYYY-MM-DD`. Format follows [Keep a Changelog](https://keepachangelog
   the inline SVG star (instead of the `✦` text glyph) and the `.ig-btn` hover no
   longer lifts (`transform: translateY(-1px)` removed). The two scripts' shared
   UI sections are back in parity.
+- **X (Twitter) scans now use X's GraphQL list queries.** X retired the REST
+  `friendships/list.json` / `followers/list.json` endpoints (they answer HTTP 200
+  with an unrelated body), so the scan switched to the same `Following` /
+  `Followers` GraphQL queries the web app itself fires. Because X rotates the
+  query IDs and `features`, UnMutual now **auto-captures** them from the page —
+  open your Following and Followers sheets on x.com once, and the bookmarklet
+  reads the requests already in that tab (`captureGqlUrl` /
+  `captureGqlFromPerformance`, persisted under `unmutual.x.v2.graphql`), with an
+  optional hardcoded `GQL_DEFAULTS` fallback in section 6. Unfollowing still uses
+  `friendships/destroy.json` (still served by X).
 
 ### Accessibility
 

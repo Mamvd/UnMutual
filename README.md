@@ -21,7 +21,7 @@ Everything runs **100% locally in your browser**: no servers, no accounts, no th
 
 Both platform scripts share the same architecture, features and safety model — only the platform API layer, auth and branding differ. `npm run build` produces both bookmarklets plus a single merged installer (`index.html`) with a platform switcher.
 
-> **Note on the X (Twitter) build:** it targets the stable internal REST 1.1 endpoints (`i/api/1.1/…`) rather than X's GraphQL query IDs, which rotate frequently. If X ever changes these endpoints, only the API section (section 6) of `script-x.js` needs updating.
+> **Note on the X (Twitter) build:** X has retired its REST list endpoints (`i/api/1.1/friendships/list.json`), so the scan now uses the same GraphQL queries the web app itself fires (`Following` / `Followers`). Their query IDs and `features` rotate, so UnMutual **auto-captures** them from your own browser: open your Following and Followers sheets on x.com once, and the bookmarklet reads the requests already in that tab — no manual configuration, and it stays current when X rotates them again.
 
 ---
 
@@ -67,7 +67,7 @@ The scan runs in **two phases** — following first, then followers — so each 
 | **Mutuals** | You follow each other |
 | **Unknown** | The API didn't report the follow flag — never guessed, excluded from counts |
 
-> On Instagram, list totals come straight from the API; on X the REST lists don't report totals, so the Following/Followers stats reflect everything the scan has seen so far.
+> On Instagram, list totals come straight from the API; on X the GraphQL queries report the real totals on each response, so the Following/Followers stats are the true counts.
 
 On a **following-list** node, `follows_viewer` means *"this user follows you back"*; on a **followers-list** node, `followed_by_viewer` means *"you follow this user back"*. If a flag isn't a boolean, the account is marked **unknown** — the app never guesses.
 

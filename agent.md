@@ -60,7 +60,7 @@ unless a section says otherwise.
 | `tools/og-image.js` | Zero-dependency generator for `assets/og-image.png` (the OG/Twitter card image) — pure Node, built-in zlib only. Run with `node tools/og-image.js` after changing the design. |
 | `assets/og-image.png` | Generated 1200×630 card image referenced by the installer's `og:image` / `twitter:image`. Committed, regenerable. |
 | `test-ig.js` | Headless smoke tests for `script-ig.js` (stubbed DOM/fetch/localStorage). |
-| `test-x.js` | Headless smoke tests for `script-x.js` — same coverage, X-specific REST fixtures. |
+| `test-x.js` | Headless smoke tests for `script-x.js` — same coverage, X-specific GraphQL fixtures. |
 | `bookmarklet-ig.txt` / `bookmarklet-x.txt` | Generated — the paste-ready `javascript:` URLs. Never hand-edit. Git-ignored (regenerate with `npm run build`); `index.html` is the committed artifact. |
 | `index.html` | Generated merged installer. Never hand-edit. |
 | `README.md` | User-facing docs (features, install, safety notes). |
@@ -93,12 +93,15 @@ Run **all three** (`npm run verify`) after any change to a platform script. Run
    (caps, auto-pause) without flagging it.
 4. **Network policy.** Per platform script, the only external calls allowed are
    read-only GETs to the platform's list endpoints (Instagram: `instagram.com/graphql/…`
-   via `buildFollowingUrl`; X/Twitter: `x.com/i/api/1.1/friendships/list.json` and
-   `followers/list.json`) and the single unfollow POST (Instagram:
+   via `buildFollowingUrl`; X/Twitter: the `i/api/graphql/<queryId>/Following` and
+   `/Followers` queries via `buildGqlUrl` — X retired the REST `friendships/list.json`
+   endpoints) and the single unfollow POST (Instagram:
    `instagram.com/web/friendships/<id>/unfollow/`; X:
    `x.com/i/api/1.1/friendships/destroy.json?user_id=<id>`) — see `unfollowOne`.
-   Nothing else, ever. X's GraphQL query IDs rotate, so `script-x.js` deliberately
-   uses the stable REST 1.1 endpoints; if X shuts them down, only its section 6 changes.
+   Nothing else, ever. X's GraphQL query IDs + `features` rotate, so `script-x.js`
+   auto-captures them from the page (section 6: `captureGqlUrl` /
+   `captureGqlFromPerformance` / `patchGqlCapture`) and persists them under
+   `unmutual.x.v2.graphql`.
 5. **Security invariants:**
    - Escape **all** user-controlled data in HTML: use `esc()`; never interpolate raw.
    - Cookies are only read (Instagram: `ds_user_id` / `csrftoken`; X/Twitter:
@@ -134,7 +137,7 @@ Run **all three** (`npm run verify`) after any change to a platform script. Run
 platforms: **1** (constants: hostnames, storage keys, throttle keys, accents),
 **3** (no migration in `script-x.js`), **6** (API: URLs, headers, `getUserId` from
 the `twid` cookie, `normalizeUser`), **7** (login check reads the `twid` cookie — `auth_token` is HttpOnly;
-REST response parsing), **7.5** (unfollow uses `ct0` + `friendships/destroy.json`),
+GraphQL timeline response parsing), **7.5** (unfollow uses `ct0` + `friendships/destroy.json`),
 and **15** (boot guard + branding). Everything else — pacing, UI, analysis,
 exports, actions, event wiring — is shared verbatim.
 
@@ -145,7 +148,7 @@ exports, actions, event wiring — is shared verbatim.
 | 3 | Persistence: `loadJSON`, `loadSettings`/`defaultSettings`, `saveSettings`, `saveHistory`, `saveSnapshot` |
 | 4 | State object `S` (status, users, selection, tabs, filters, settings, history, snapshot) |
 | 5 | Pacing engine: `scanPause` (bursts/cooldowns), `canScan` (daily cap + min gap) |
-| 6 | API: `buildFollowingUrl`, `buildFollowersUrl` (query-hash fallback), `detectThrottle`, `normalizeUser` (list-aware: sets `inFollowing` / `inFollowers`) |
+| 6 | API: GraphQL `buildGqlUrl` + `parseGqlTimeline` (X's web-app `Following` / `Followers` queries), self-capturing config (`captureGqlUrl`, `captureGqlFromPerformance`, `patchGqlCapture`, `gqlFor`, `GQL_DEFAULTS`), `detectThrottle`, `normalizeUser` (list-aware: sets `inFollowing` / `inFollowers`) |
 | 7 | `scan(resume)` — two-phase paginated loop (following phase → followers phase), per-phase page cap so one list can't starve the other, id-merge dedupe, throttle → `status="throttled"` + Resume (only when resumable), cancel, history kinds: done / capped / cancelled / throttled / error, snapshot |
 | 7.5 | Unfollow engine: `canUnfollow` (daily cap), `unfollowOne` (POST + csrf), `unfollowStep` (paced loop, throttle → resume, session cap), `onUnfollowed` (removes user, persists daily counter), `showUnfollowConfirm` |
 | 8 | Analysis: `isNonFollower`, `isNotFollowedBack`, `getFiltered` (tab → search → chips → sort), `selectedUsers` |
@@ -174,9 +177,10 @@ exports, actions, event wiring — is shared verbatim.
 - Pagination uses `first` (24 or 50, configurable) + `after` cursor.
 
 ## Testing conventions- `test-ig.js` (Instagram) and `test-x.js` (X/Twitter) each seed instant pacing + high caps into the storage stub **before** their script runs, so scans complete
-  immediately. `test-x.js` stubs the REST endpoints (`friendships/list.json`,
-  `followers/list.json`, `friendships/destroy.json`) and the `auth_token` / `twid` /
-  `ct0` cookies.
+  immediately. `test-x.js` seeds the captured GraphQL config (`unmutual.x.v2.graphql`)
+  and stubs the `i/api/graphql/<queryId>/Following` / `Followers` endpoints with
+  timeline fixtures, plus `friendships/destroy.json` for unfollows, and the
+  `auth_token` / `twid` / `ct0` cookies.
 - The fake fetch serves pages keyed off the `after` cursor; 8 users / 3 per page.
 - Assertions read rendered output via `registry.get("um-<id>")._html`.
 - The last test executes the **minified output** (`minify(script-ig.js)`) in a fresh VM and

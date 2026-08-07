@@ -122,6 +122,34 @@ store.set(
   }),
 );
 
+/* Seed the captured GraphQL config (queryId + features) the way the script's
+   own capture would — X no longer serves the REST list endpoints. */
+store.set(
+  "unmutual.x.v2.graphql",
+  JSON.stringify({
+    Following: {
+      queryId: "TESTIDFOLLOWING123",
+      variables: JSON.stringify({
+        userId: "123456",
+        count: 3,
+        includePromotedContent: false,
+      }),
+      features: "{}",
+      fieldToggles: "",
+    },
+    Followers: {
+      queryId: "TESTIDFOLLOWERS123",
+      variables: JSON.stringify({
+        userId: "123456",
+        count: 3,
+        includePromotedContent: false,
+      }),
+      features: "{}",
+      fieldToggles: "",
+    },
+  }),
+);
+
 /* ---------------- sandbox ---------------- */
 let fetchImpl = null;
 
@@ -233,15 +261,64 @@ function followerUserObj(k) {
   };
 }
 
+/* Wrap a list of user objects in the GraphQL timeline envelope the web app
+   returns for Following / Followers (data.user.result.timeline...). */
+function gqlEnvelope(users, nextCursor, counts) {
+  const entries = users.map((u, i) => ({
+    entryId: "user-" + i,
+    sortIndex: String(i),
+    content: {
+      entryType: "TimelineTimelineItem",
+      itemContent: {
+        itemType: "TimelineUser",
+        user_results: { result: { __typename: "User", legacy: u } },
+      },
+    },
+  }));
+  if (nextCursor) {
+    entries.push({
+      entryId: "cursor-bottom",
+      content: {
+        entryType: "TimelineTimelineCursor",
+        cursorType: "Bottom",
+        value: nextCursor,
+      },
+    });
+  }
+  return {
+    data: {
+      user: {
+        result: {
+          __typename: "User",
+          legacy: {
+            friends_count: counts.following,
+            followers_count: counts.followers,
+          },
+          timeline: {
+            timeline: {
+              instructions: [{ type: "TimelineAddEntries", entries }],
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 function makeGoodFetch() {
   return (url) => {
     const u = String(url);
-    const isFol = u.indexOf("followers/list.json") !== -1;
+    const isFol = u.indexOf("/Followers?") !== -1;
     let start = 0;
     try {
-      const q = u.indexOf("?") !== -1 ? u.split("?")[1] : "";
-      const m = /[?&]cursor=([^&]*)/.exec(q);
-      if (m) start = Number(decodeURIComponent(m[1]).replace("cursor-", ""));
+      // The cursor rides inside the single URL-encoded `variables` param —
+      // match against the full URL so the leading `?` is present.
+      const m = /[?&]variables=([^&]*)/.exec(u);
+      if (m) {
+        const vars = JSON.parse(decodeURIComponent(m[1]));
+        if (vars && vars.cursor)
+          start = Number(String(vars.cursor).replace("cursor-", ""));
+      }
     } catch (e) {}
     const size = 3;
     const total = isFol ? FOLLOWERS_TOTAL : FOLLOWING_TOTAL;
@@ -253,10 +330,12 @@ function makeGoodFetch() {
       status: 200,
       text: () =>
         Promise.resolve(
-          JSON.stringify({
-            users: slice,
-            next_cursor_str: end < total ? "cursor-" + end : "0",
-          }),
+          JSON.stringify(
+            gqlEnvelope(slice, end < total ? "cursor-" + end : null, {
+              following: FOLLOWING_TOTAL,
+              followers: FOLLOWERS_TOTAL,
+            }),
+          ),
         ),
     });
   };
@@ -404,6 +483,23 @@ function makeMiniEnv(min) {
       copyFormat: "username",
     }),
   );
+  st.set(
+    "unmutual.x.v2.graphql",
+    JSON.stringify({
+      Following: {
+        queryId: "TESTIDFOLLOWING123",
+        variables: JSON.stringify({ userId: "123456", count: 3 }),
+        features: "{}",
+        fieldToggles: "",
+      },
+      Followers: {
+        queryId: "TESTIDFOLLOWERS123",
+        variables: JSON.stringify({ userId: "123456", count: 3 }),
+        features: "{}",
+        fieldToggles: "",
+      },
+    }),
+  );
   const ls = {
     getItem: (k) => (st.has(k) ? st.get(k) : null),
     setItem: (k, v) => st.set(k, String(v)),
@@ -513,19 +609,153 @@ function t(name, cond, extra) {
   const nu = app.utils.normalizeUser({ screen_name: "y" });
   t("normalizeUser: unknown when flag missing", nu.unknown === true);
   t("esc escapes HTML", app.utils.esc("<b>&") === "&lt;b&gt;&amp;");
-  const url = app.utils.buildFollowingUrl("123", "c1");
+  const url = app.utils.buildGqlUrl("Following", null);
   t(
-    "following url uses friendships/list.json",
-    url.indexOf("friendships/list.json") !== -1,
-    url,
+    "gql url hits the graphql endpoint",
+    url.indexOf("/i/api/graphql/TESTIDFOLLOWING123/Following?") !== -1 &&
+      url.indexOf("features=") !== -1,
+    url.slice(0, 140),
   );
-  t("url has user_id", url.indexOf("user_id=123") !== -1);
-  t("url has page size", url.indexOf("count=3") !== -1);
-  t("url has cursor", url.indexOf("cursor=c1") !== -1);
-  const furl = app.utils.buildFollowersUrl("123");
+  t("gql url has user id", url.indexOf("userId") !== -1);
+  t("gql url has page size", url.indexOf("count") !== -1);
+  const furl = app.utils.buildGqlUrl("Followers", "c1");
   t(
-    "followers url uses followers/list.json",
-    furl.indexOf("followers/list.json") !== -1,
+    "gql url carries the cursor",
+    furl.indexOf("/Followers?") !== -1 && furl.indexOf("cursor") !== -1,
+    furl.slice(0, 140),
+  );
+  app.utils.captureGqlUrl(
+    "https://x.com/i/api/graphql/TESTIDFOLLOWERS123/Followers?variables=" +
+      encodeURIComponent('{"userId":"123456"}') +
+      "&features=" +
+      encodeURIComponent('{"verified":true}'),
+  );
+  t(
+    "capture parses features from a request URL",
+    app.utils.gqlFor("Followers") &&
+      app.utils.gqlFor("Followers").features === '{"verified":true}',
+  );
+  // Restore the plain features so later scan fixtures behave identically.
+  app.utils.captureGqlUrl(
+    "https://x.com/i/api/graphql/TESTIDFOLLOWERS123/Followers?variables=" +
+      encodeURIComponent('{"userId":"123456"}') +
+      "&features=%7B%7D",
+  );
+  // Captured config must persist to localStorage, not just in memory.
+  app.utils.captureGqlUrl(
+    "https://x.com/i/api/graphql/PERSISTID12345678/Following?variables=" +
+      encodeURIComponent('{"userId":"123456"}'),
+  );
+  t(
+    "capture persists to localStorage",
+    JSON.parse(store.get("unmutual.x.v2.graphql")).Following.queryId ===
+      "PERSISTID12345678",
+  );
+  app.utils.captureGqlUrl(
+    "https://x.com/i/api/graphql/TESTIDFOLLOWING123/Following?variables=" +
+      encodeURIComponent('{"userId":"123456"}'),
+  );
+
+  console.log("Test: parseGqlTimeline edge cases");
+  const p1 = app.utils.parseGqlTimeline({
+    data: {
+      user: {
+        result: {
+          __typename: "User",
+          legacy: { friends_count: 8, followers_count: 7 },
+          timeline: {
+            timeline: {
+              instructions: [
+                {
+                  type: "TimelineAddEntries",
+                  entries: [
+                    {
+                      content: {
+                        entryType: "TimelineTimelineItem",
+                        itemContent: {
+                          itemType: "TimelineUser",
+                          user_results: {
+                            result: { __typename: "UserUnavailable" },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+                {
+                  type: "TimelineAddEntries",
+                  entries: [
+                    {
+                      content: {
+                        entryType: "TimelineTimelineCursor",
+                        cursorType: "Bottom",
+                        value: "cur-1",
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  });
+  t("parser skips unavailable users", p1.users.length === 0);
+  t(
+    "parser reads the cursor from a separate instruction",
+    p1.next === "cur-1",
+    p1.next,
+  );
+  t(
+    "parser reads real counts",
+    p1.counts.following === 8 && p1.counts.followers === 7,
+  );
+  const p2 = app.utils.parseGqlTimeline({
+    data: {
+      user: {
+        result: {
+          legacy: { friends_count: 5 },
+          timeline: {
+            timeline: {
+              instructions: [
+                {
+                  type: "TimelineAddEntries",
+                  entries: [
+                    {
+                      content: {
+                        entryType: "TimelineTimelineCursor",
+                        cursorType: "Bottom",
+                        value: "0",
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  });
+  t("parser treats a 0 cursor as the end", p2.next === null);
+  const p3 = app.utils.parseGqlTimeline({
+    data: {
+      user: {
+        result: {
+          legacy: { friends_count: 5 },
+          timeline: { timeline: { instructions: [] } },
+        },
+      },
+    },
+  });
+  t(
+    "parser returns an empty page with counts",
+    p3.users.length === 0 && p3.counts.following === 5,
+  );
+  t(
+    "parser tolerates null input",
+    app.utils.parseGqlTimeline(null).users.length === 0,
   );
   const th = app.utils.detectThrottle(429, "", {
     errors: [{ code: 88, message: "Rate limit exceeded" }],
@@ -783,8 +1013,8 @@ function t(name, cond, extra) {
     String(S.users.length),
   );
   t(
-    "followers counted even when capped",
-    S.followersCount === 6,
+    "followers real total reported even when capped",
+    S.followersCount === FOLLOWERS_TOTAL,
     String(S.followersCount),
   );
   t(
@@ -815,6 +1045,34 @@ function t(name, cond, extra) {
     S.status + " / " + S.users.length,
   );
   document.cookie = savedCookie3;
+
+  console.log("Test: GraphQL config gate");
+  const savedGql = store.get("unmutual.x.v2.graphql");
+  store.delete("unmutual.x.v2.graphql");
+  app.utils.clearGqlConfig();
+  fetchImpl = makeGoodFetch();
+  await app.scan();
+  const gb = (registry.get("um-banner")._html || "").toLowerCase();
+  t(
+    "missing GraphQL config shows the setup banner",
+    gb.indexOf("one-time setup") !== -1 && gb.indexOf("graphql") !== -1,
+    gb.slice(0, 160),
+  );
+  t(
+    "scan never starts without config",
+    S.status !== "scanning" && S.status !== "throttled",
+    S.status,
+  );
+  // Restore config for the rest of the suite.
+  store.set("unmutual.x.v2.graphql", savedGql);
+  app.utils.captureGqlUrl(
+    "https://x.com/i/api/graphql/TESTIDFOLLOWING123/Following?variables=" +
+      encodeURIComponent('{"userId":"123456"}'),
+  );
+  app.utils.captureGqlUrl(
+    "https://x.com/i/api/graphql/TESTIDFOLLOWERS123/Followers?variables=" +
+      encodeURIComponent('{"userId":"123456"}'),
+  );
 
   console.log("Test: daily cap");
   S.settings.maxScansPerDay = 0; // 0 allowed → any history today blocks

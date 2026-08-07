@@ -4,8 +4,9 @@
  * A bookmarklet that runs on x.com / twitter.com while you are logged in.
  *
  * What it does:
- *   - Scans YOUR following list AND your followers list (read-only internal
- *     REST requests, the same i/api/1.1 endpoints the X web app uses).
+ *   - Scans YOUR following list AND your followers list (read-only requests to
+ *     X's own GraphQL Following/Followers queries — the same ones the web app
+ *     fires, auto-captured so rotating query IDs never need manual updates).
  *   - Flags accounts that do not follow you back ("non-followers") and accounts
  *     you do not follow back ("don't follow back"), plus mutuals — with real
  *     counts of what the scan has seen.
@@ -50,6 +51,7 @@
     HISTORY: "unmutual.x.v2.history",
     SNAPSHOT: "unmutual.x.v2.snapshot",
     UNFOLLOWS: "unmutual.x.v2.unfollows",
+    GQL: "unmutual.x.v2.graphql",
   };
 
   /* ============================================================
@@ -530,6 +532,29 @@
     return t || null;
   }
 
+  /* One random x-client-uuid per run, mirroring the header the web app sends. */
+  var X_CLIENT_UUID = (function () {
+    function rnd(n) {
+      var s = "";
+      var chars = "0123456789abcdef";
+      for (var i = 0; i < n; i++)
+        s += chars.charAt(Math.floor(Math.random() * 16));
+      return s;
+    }
+    return (
+      rnd(8) +
+      "-" +
+      rnd(4) +
+      "-4" +
+      rnd(3) +
+      "-" +
+      "89ab".charAt(Math.floor(Math.random() * 4)) +
+      rnd(3) +
+      "-" +
+      rnd(12)
+    );
+  })();
+
   /* The internal API expects the same headers the web app sends: the guest
      bearer, the CSRF token from the ct0 cookie, and the session markers. */
   function buildHeaders() {
@@ -538,35 +563,255 @@
       "x-csrf-token": getCookie("ct0") || "",
       "x-twitter-active-user": "yes",
       "x-twitter-auth-type": "OAuth2Session",
+      "x-client-uuid": X_CLIENT_UUID,
       "x-requested-with": "XMLHttpRequest",
     };
   }
 
-  function buildListUrl(list, userId, cursor) {
-    var qs =
-      "user_id=" +
-      encodeURIComponent(String(userId)) +
-      "&count=" +
-      S.settings.pageSize +
-      "&include_profile_interstitial_type=1&include_blocking=1&include_blocked_by=1" +
-      "&include_followed_by=1&include_followee_whitelist=1&include_mutual_following=1" +
-      "&include_user_can_subscribe=1&skip_status=1";
-    if (cursor) qs += "&cursor=" + encodeURIComponent(String(cursor));
+  /* ------------------------------------------------------------
+   * GraphQL list API (the web app's actual data source)
+   * ------------------------------------------------------------
+   * X no longer serves the legacy friendships/list.json /
+   * followers/list.json REST endpoints (they now answer HTTP 200 with an
+   * unrelated body). The Following / Followers sheets in the web app are
+   * GraphQL:
+   *   GET https://x.com/i/api/graphql/<queryId>/Following
+   *       ?variables=...&features=...&fieldToggles=...
+   * The queryId + features rotate, so UnMutual captures X's own requests
+   * from the page's resource-timing buffer (opening your Following /
+   * Followers sheets leaves them there) and persists them under K.GQL.
+   * Hardcoded GQL_DEFAULTS below take priority when present.
+   * ------------------------------------------------------------ */
+
+  // Optional hardcoded fallback — paste captured values here, e.g.
+  // { queryId: "<32-hex>", features: "{...}", fieldToggles: "{...}" }.
+  var GQL_DEFAULTS = {
+    Following: null,
+    Followers: null,
+  };
+
+  var GQL = { captured: null }; // captured per-query config
+
+  function loadGqlConfig() {
+    var c = loadJSON(K.GQL, null);
+    GQL.captured = c && typeof c === "object" ? c : null;
+  }
+
+  function gqlFor(query) {
+    var d = GQL_DEFAULTS && GQL_DEFAULTS[query];
+    if (d && d.queryId) return d;
+    var c = GQL.captured && GQL.captured[query];
+    return c && c.queryId ? c : null;
+  }
+
+  /* Record a captured GraphQL request for a list query. Accepts a full
+     request URL like
+     https://x.com/i/api/graphql/<queryId>/Following?variables=...&features=...
+     Returns true when a query was captured and persisted. */
+  function captureGqlUrl(raw) {
+    var u = String(raw || "");
+    var m = /\/i\/api\/graphql\/([A-Za-z0-9_-]{10,})\/(Following|Followers)(\?[^#]*)?/.exec(
+      u,
+    );
+    if (!m) return false;
+    var query = m[2];
+    var qs = (m[3] || "").replace(/^\?/, "");
+    var vars = null;
+    var feats = "";
+    var toggles = "";
+    var parts = qs.split("&");
+    for (var i = 0; i < parts.length; i++) {
+      var kv = parts[i];
+      var eq = kv.indexOf("=");
+      if (eq === -1) continue;
+      var k = kv.slice(0, eq);
+      var v = kv.slice(eq + 1);
+      try {
+        v = decodeURIComponent(v);
+      } catch (e) {}
+      if (k === "variables") vars = v;
+      else if (k === "features") feats = v;
+      else if (k === "fieldToggles") toggles = v;
+    }
+    if (!vars) return false;
+    GQL.captured = GQL.captured || {};
+    GQL.captured[query] = {
+      queryId: m[1],
+      variables: vars,
+      features: feats,
+      fieldToggles: toggles,
+      t: Date.now(),
+    };
+    try {
+      localStorage.setItem(K.GQL, JSON.stringify(GQL.captured));
+    } catch (e) {}
+    return true;
+  }
+
+  /* Scan the page's resource-timing buffer for X's own Following/Followers
+     GraphQL requests (they appear when the user opens those sheets). */
+  function captureGqlFromPerformance() {
+    var entries = null;
+    try {
+      entries =
+        window.performance && performance.getEntriesByType
+          ? performance.getEntriesByType("resource")
+          : null;
+    } catch (e) {
+      entries = null;
+    }
+    var found = false;
+    if (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i] && entries[i].name && captureGqlUrl(entries[i].name))
+          found = true;
+      }
+    }
+    return found;
+  }
+
+  /* Wrap fetch + XHR so requests the web app makes while UnMutual is running
+     are captured too (belt-and-suspenders for the performance buffer). */
+  function patchGqlCapture() {
+    if (window.__UNM_GQL_PATCHED__) return;
+    window.__UNM_GQL_PATCHED__ = true;
+    var of = window.fetch;
+    if (typeof of === "function") {
+      window.fetch = function (input) {
+        var u =
+          typeof input === "string"
+            ? input
+            : input && input.url
+              ? input.url
+              : "";
+        if (u) captureGqlUrl(u);
+        return of.apply(this, arguments);
+      };
+    }
+    if (typeof XMLHttpRequest !== "undefined" && XMLHttpRequest.prototype) {
+      var oo = XMLHttpRequest.prototype.open;
+      if (typeof oo === "function") {
+        XMLHttpRequest.prototype.open = function (method, url) {
+          if (url) captureGqlUrl(url);
+          return oo.apply(this, arguments);
+        };
+      }
+    }
+  }
+
+  /* Build the GraphQL request URL for a list query. Reuses the captured
+     variables template (whatever X currently requires) with the logged-in
+     user id / page size / cursor overridden. Returns null when the query has
+     no captured config. */
+  function buildGqlUrl(query, cursor) {
+    var cfg = gqlFor(query);
+    if (!cfg) return null;
+    var variables = null;
+    try {
+      variables = JSON.parse(cfg.variables || "null");
+    } catch (e) {
+      variables = null;
+    }
+    if (
+      !variables ||
+      typeof variables !== "object" ||
+      Array.isArray(variables)
+    ) {
+      variables = {
+        userId: S.currentUserId,
+        count: S.settings.pageSize,
+        includePromotedContent: false,
+      };
+    }
+    variables.userId = S.currentUserId;
+    variables.count = S.settings.pageSize;
+    if (cursor) variables.cursor = String(cursor);
+    else delete variables.cursor;
+    var qs = "variables=" + encodeURIComponent(JSON.stringify(variables));
+    if (cfg.features) qs += "&features=" + encodeURIComponent(cfg.features);
+    if (cfg.fieldToggles)
+      qs += "&fieldToggles=" + encodeURIComponent(cfg.fieldToggles);
     return (
-      API_BASE +
+      "https://x.com/i/api/graphql/" +
+      encodeURIComponent(cfg.queryId) +
       "/" +
-      (list === "followers" ? "followers" : "friendships") +
-      "/list.json?" +
+      query +
+      "?" +
       qs
     );
   }
 
-  function buildFollowingUrl(userId, cursor) {
-    return buildListUrl("following", userId, cursor);
-  }
-
-  function buildFollowersUrl(userId, cursor) {
-    return buildListUrl("followers", userId, cursor);
+  /* Parse a GraphQL timeline response into { users, next, counts }. users
+     carry the same legacy fields normalizeUser expects (id_str, screen_name,
+     following, followed_by, ...). */
+  function parseGqlTimeline(json) {
+    var out = { users: [], next: null, counts: null };
+    var res =
+      json && json.data && json.data.user && json.data.user.result
+        ? json.data.user.result
+        : null;
+    if (!res || typeof res !== "object") return out;
+    if (res.legacy && typeof res.legacy === "object") {
+      out.counts = {
+        following:
+          typeof res.legacy.friends_count === "number"
+            ? res.legacy.friends_count
+            : null,
+        followers:
+          typeof res.legacy.followers_count === "number"
+            ? res.legacy.followers_count
+            : null,
+      };
+    }
+    var tl = res.timeline;
+    var t = tl && (tl.timeline || tl);
+    var instrs = t && Array.isArray(t.instructions) ? t.instructions : null;
+    if (!instrs) return out;
+    for (var i = 0; i < instrs.length; i++) {
+      var ins = instrs[i];
+      if (!ins || typeof ins !== "object") continue;
+      if (ins.type !== "TimelineAddEntries" || !Array.isArray(ins.entries))
+        continue;
+      for (var j = 0; j < ins.entries.length; j++) {
+        var e = ins.entries[j];
+        var c = e && e.content;
+        if (!c || typeof c !== "object") continue;
+        if (c.entryType === "TimelineTimelineCursor") {
+          // Modern shape: content.value + content.cursorType. Some responses
+          // nest the cursor under content.operation.cursor instead.
+          var cType =
+            c.cursorType ||
+            (c.operation && c.operation.cursor && c.operation.cursor.cursorType);
+          var cVal =
+            c.value ||
+            (c.operation && c.operation.cursor && c.operation.cursor.value);
+          if (cType === "Bottom" && cVal && String(cVal) !== "0")
+            out.next = String(cVal);
+          continue;
+        }
+        if (
+          c.entryType === "TimelineTimelineItem" &&
+          c.itemContent &&
+          c.itemContent.itemType === "TimelineUser"
+        ) {
+          var ur = c.itemContent.user_results && c.itemContent.user_results.result;
+          var L = ur && ur.legacy;
+          if (L && L.id_str) {
+            out.users.push({
+              id_str: String(L.id_str || ""),
+              screen_name: String(L.screen_name || ""),
+              name: String(L.name || ""),
+              verified: !!L.verified || !!L.is_blue_verified,
+              protected: !!L.protected,
+              profile_image_url_https: String(L.profile_image_url_https || ""),
+              following: L.following,
+              followed_by: L.followed_by,
+            });
+          }
+        }
+      }
+    }
+    return out;
   }
 
   /* Build a one-line, human-readable summary of a raw response so every error
@@ -783,6 +1028,27 @@
         );
         return Promise.resolve();
       }
+      // X's list scans need GraphQL config (queryId + features). Try to
+      // auto-capture from the page's resource buffer, then require it.
+      if (!gqlFor("Following") || !gqlFor("Followers"))
+        captureGqlFromPerformance();
+      var missing = [];
+      if (!gqlFor("Following")) missing.push("Following");
+      if (!gqlFor("Followers")) missing.push("Followers");
+      if (missing.length) {
+        banner(
+          "error",
+          "X API changed — one-time setup needed",
+          "X no longer serves the old REST list endpoints; its web app now uses " +
+            "rotating GraphQL queries (" +
+            missing.join(" and ") +
+            "). UnMutual reads those from your own browser automatically: on " +
+            "x.com, open your profile → Following sheet, then the Followers " +
+            "sheet, then run the bookmarklet again. Nothing is sent anywhere — " +
+            "UnMutual only reads X's requests already in this tab.",
+        );
+        return Promise.resolve();
+      }
       S.forcedBanner = null;
       S.status = "scanning";
       S.cancel = false;
@@ -860,20 +1126,38 @@
 
     function fetchPage() {
       var isFol = S.phase === "followers";
-      var url = isFol
-        ? buildFollowersUrl(S.currentUserId, S.cursor)
-        : buildFollowingUrl(S.currentUserId, S.cursor);
-      return fetch(url, {
-        method: "GET",
-        credentials: "include",
-        headers: buildHeaders(),
-      })
+      var query = isFol ? "Followers" : "Following";
+      // Missing config is routed through the same throttle handler below so it
+      // always renders a banner + history entry, never a silent end.
+      return Promise.resolve()
+        .then(function () {
+          var url = buildGqlUrl(query, S.cursor);
+          if (!url) {
+            S.throttle = {
+              reason:
+                "No GraphQL config for the " +
+                query +
+                " list yet. On x.com, open your profile → " +
+                (isFol ? "Followers" : "Following") +
+                " sheet once, then run the bookmarklet again.",
+              resumable: false,
+            };
+            return null;
+          }
+          return fetch(url, {
+            method: "GET",
+            credentials: "include",
+            headers: buildHeaders(),
+          });
+        })
         .then(function (resp) {
+          if (!resp) return null;
           return resp.text().then(function (text) {
             return { status: resp.status, text: text };
           });
         })
         .then(function (res) {
+          if (!res) return;
           var json = null;
           try {
             json = JSON.parse(res.text);
@@ -893,30 +1177,44 @@
             S.throttle = th;
             return;
           }
-          var users = json && Array.isArray(json.users) ? json.users : null;
-          if (!users) {
-            // Self-diagnosing: surface the exact status + body so a real API
-            // change is identifiable from the banner alone.
-            var snippet = describeResponse(res.status, res.text);
-            var apiErr =
-              json && Array.isArray(json.errors) && json.errors.length
-                ? json.errors[0]
-                : null;
-            var apiMsg =
-              apiErr && typeof apiErr === "object"
-                ? String(apiErr.message || apiErr.reason || "")
+          // X GraphQL errors arrive as { errors: [...] } even with HTTP 200.
+          if (json && Array.isArray(json.errors) && json.errors.length) {
+            var e0 = json.errors[0];
+            var emsg =
+              e0 && typeof e0 === "object"
+                ? String(e0.message || e0.reason || "")
                 : "";
             var resumable =
-              !apiMsg ||
-              !/login|authenticate|suspended|locked|challenge/i.test(apiMsg);
+              !emsg ||
+              !/login|authenticate|suspended|locked|challenge|invalid query|not authorized/i.test(
+                emsg,
+              );
             S.throttle = {
-              reason: apiMsg
-                ? "X API error: " + apiMsg + " (" + snippet + ")"
-                : "Unexpected response shape from X (" + snippet + ").",
+              reason: emsg
+                ? "X API error: " +
+                  emsg +
+                  " (" +
+                  describeResponse(res.status, res.text) +
+                  ")"
+                : "X API error (" + describeResponse(res.status, res.text) + ").",
               resumable: resumable,
             };
             return;
           }
+          var parsed = parseGqlTimeline(json);
+          // A valid page has counts, users, or a next cursor. Anything else is
+          // an unexpected shape — surface the status + body for diagnosis.
+          if (!parsed.counts && parsed.users.length === 0 && !parsed.next) {
+            S.throttle = {
+              reason:
+                "Unexpected response shape from X (" +
+                describeResponse(res.status, res.text) +
+                ").",
+              resumable: true,
+            };
+            return;
+          }
+          var users = parsed.users;
           for (var i = 0; i < users.length; i++) {
             var u = normalizeUser(users[i], S.phase);
             if (!u.id) continue;
@@ -935,14 +1233,22 @@
           }
           S.pagesFetched++;
           S.phasePages++;
-          // The REST lists report no totals — track running counts per phase.
-          var seen = 0;
-          for (var j = 0; j < S.users.length; j++) {
-            if (isFol ? S.users[j].inFollowers : S.users[j].inFollowing) seen++;
+          // GraphQL reports real totals on the user result — use them when
+          // present, otherwise fall back to running counts per phase.
+          if (parsed.counts) {
+            if (typeof parsed.counts.following === "number")
+              S.countTotal = parsed.counts.following;
+            if (typeof parsed.counts.followers === "number")
+              S.followersCount = parsed.counts.followers;
+          } else {
+            var seen = 0;
+            for (var j = 0; j < S.users.length; j++) {
+              if (isFol ? S.users[j].inFollowers : S.users[j].inFollowing) seen++;
+            }
+            if (isFol) S.followersCount = seen;
+            else S.countTotal = seen;
           }
-          if (isFol) S.followersCount = seen;
-          else S.countTotal = seen;
-          var nc = json.next_cursor_str;
+          var nc = parsed.next;
           var hasNext = typeof nc === "string" && nc !== "" && nc !== "0";
           S.cursor = hasNext ? nc : null;
           if (!hasNext) {
@@ -2804,6 +3110,10 @@
       return;
     }
 
+    loadGqlConfig();
+    captureGqlFromPerformance();
+    patchGqlCapture();
+
     var prevApp = window.__UNM_APP__;
     if (prevApp && prevApp.state) prevApp.state.cancel = true; // stop any orphaned scan from an earlier run
 
@@ -2818,8 +3128,13 @@
         randHuman: randHuman,
         esc: esc,
         getCopyText: getCopyText,
-        buildFollowingUrl: buildFollowingUrl,
-        buildFollowersUrl: buildFollowersUrl,
+        buildGqlUrl: buildGqlUrl,
+        captureGqlUrl: captureGqlUrl,
+        gqlFor: gqlFor,
+        parseGqlTimeline: parseGqlTimeline,
+        clearGqlConfig: function () {
+          GQL.captured = null;
+        },
         detectThrottle: detectThrottle,
         normalizeUser: normalizeUser,
         getFiltered: getFiltered,
