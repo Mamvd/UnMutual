@@ -717,6 +717,22 @@ function t(name, cond, extra) {
     S.history[0] && S.history[0].kind === "error",
   );
 
+  console.log("Test: self-diagnosing errors");
+  // A JSON response that isn't the expected GraphQL shape — banner must carry
+  // the status + body snippet so the failure is identifiable without DevTools.
+  fetchImpl = () =>
+    Promise.resolve({
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ weird: "payload" })),
+    });
+  await app.scan();
+  const us = (registry.get("um-banner")._html || "").toLowerCase();
+  t(
+    "unexpected-shape banner includes HTTP status + body",
+    us.indexOf("http 200") !== -1 && us.indexOf("weird") !== -1,
+    us.slice(0, 200),
+  );
+
   console.log("Test: cancel");
   fetchImpl = makeGoodFetch();
   S.settings.pageDelayMean = 400;

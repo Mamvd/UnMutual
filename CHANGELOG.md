@@ -7,6 +7,39 @@ Dates are `YYYY-MM-DD`. Format follows [Keep a Changelog](https://keepachangelog
 
 ## [Unreleased]
 
+### Fixed
+
+- **X (Twitter) scan errors are now self-diagnosing.** Every error banner carries
+  the exact HTTP status and a snippet of the response body (via a new
+  `describeResponse` helper), so an API change is identifiable without DevTools.
+  `detectThrottle` now also pauses on *any* non-2xx status (404 endpoint gone,
+  500, …) instead of falling through to a vague "Unexpected response shape",
+  and surfaces the real message when X returns an error envelope.
+- Same diagnostics treatment for the Instagram script's "Unexpected response
+  shape" / HTML-wall paths.
+
+### Accessibility
+
+- Toasts, progress bar and progress text are now announced: `aria-live="polite"`
+  on the toast container and progress text, `role="progressbar"` + live
+  `aria-valuenow` on the progress bar.
+- Modals are now proper dialogs (`role="dialog"`, `aria-modal`, labelled by the
+  title), with focus moved into the dialog on open, restored on close, and a
+  Tab focus trap while open. Icon-only `×` buttons got `aria-label`s.
+- Search input: `aria-label`, `autocomplete="off"`, `spellcheck="false"`.
+- CSS: removed `transition: all` (lists properties explicitly), added a proper
+  `:focus-visible` ring on the search input, and a `prefers-reduced-motion`
+  media query that disables the pulse/fade animations.
+
+### Installer
+
+- The installer now uses each platform's own accent (Instagram pink vs X blue)
+  for the active tab, drag button and copy button — no more Instagram gradient
+  on the X panel. Tabs/panels got proper `role="tablist"/"tab"/"tabpanel"`
+  semantics, and the code textarea is marked `translate="no"`.
+- SEO/meta hygiene: meta description, canonical URL, Open Graph tags, favicon
+  and `theme-color` added to the generated `index.html`.
+
 ### Repo — tooling & packaging
 
 - Merged the Instagram and X installers into a single `index.html` with a platform

@@ -162,13 +162,13 @@ function installerHtml(platforms) {
   const tabs = platforms
     .map(
       (p, i) =>
-        `<button class="tab${i === 0 ? " active" : ""}" data-tab="${p.id}">${p.label}</button>`,
+        `        <button class="tab${i === 0 ? " active" : ""}" data-tab="${p.id}" id="tab-btn-${p.id}" role="tab" aria-selected="${i === 0}" aria-controls="tab-${p.id}">${p.label}</button>`,
     )
     .join("");
   const panels = platforms
     .map(
       (p, i) => `
-    <div class="panel${i === 0 ? " active" : ""}" id="tab-${p.id}">
+    <div class="panel${i === 0 ? " active" : ""}" id="tab-${p.id}" role="tabpanel" aria-labelledby="tab-btn-${p.id}">
       <div class="card">
         <h2>${p.title} <span class="ver">${p.version}</span></h2>
         <ol>
@@ -177,8 +177,8 @@ function installerHtml(platforms) {
         </ol>
         <p class="drag"><a class="bookmarklet" href="${p.url}" title="${p.title}">✦ &nbsp;UnMutual — ${p.label}</a></p>
         <p style="color:var(--mut);font-size:13px">…or copy the code below and paste it as the <strong>URL</strong> of a new bookmark. If pasting into the address bar strips the <code>javascript:</code> prefix (Chrome does this), use the bookmark manager instead — or just use the drag button above.</p>
-        <textarea id="code-${p.id}" readonly spellcheck="false">${p.url}</textarea>
-        <button class="copy" data-copy="${p.id}">Copy bookmarklet</button><span class="msg" id="msg-${p.id}"></span>
+        <textarea id="code-${p.id}" readonly spellcheck="false" translate="no">${p.url}</textarea>
+        <button class="copy" data-copy="${p.id}">Copy bookmarklet</button><span class="msg" id="msg-${p.id}" aria-live="polite"></span>
       </div>
     </div>`,
     )
@@ -188,37 +188,51 @@ function installerHtml(platforms) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Install the UnMutual bookmarklets — follower insights for Instagram and X (Twitter). Read-only local scans, confirm-first unfollows, no third parties.">
+<meta name="theme-color" content="#0a0a0f">
+<meta property="og:type" content="website">
+<meta property="og:title" content="UnMutual — Follower Insights (Instagram & X)">
+<meta property="og:description" content="Zero-dependency bookmarklets that scan your following/followers lists and flag non-followers. 100% local, confirm-first unfollows.">
+<meta property="og:url" content="https://github.com/Mamvd/UnMutual">
+<link rel="canonical" href="https://github.com/Mamvd/UnMutual">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E">
 <title>UnMutual — Install</title>
 <style>
-  :root{--bg:#0a0a0f;--panel:#12121a;--card:#171722;--line:#26263a;--text:#e9e9f2;--mut:#8b8ba5}
+  :root{--bg:#0a0a0f;--panel:#12121a;--card:#171722;--line:#26263a;--text:#e9e9f2;--mut:#8b8ba5;--grad-ig:linear-gradient(135deg,#f09433,#dc2743 55%,#bc1888);--grad-x:linear-gradient(135deg,#1d9bf0,#0f90e8 55%,#7856ff)}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.55;padding:40px 16px}
+  body[data-accent="ig"]{--grad:var(--grad-ig)}
+  body[data-accent="x"]{--grad:var(--grad-x)}
   .wrap{max-width:760px;margin:0 auto}
   h1{font-size:24px;margin:0 0 4px}
   .sub{color:var(--mut);margin:0 0 22px}
   .tabs{display:flex;gap:8px;margin-bottom:16px}
-  .tab{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:999px;padding:8px 18px;font-size:14px;cursor:pointer}
-  .tab.active{color:#fff;border-color:transparent;background:linear-gradient(135deg,#f09433,#dc2743 55%,#bc1888)}
+  .tab{border:1px solid var(--line);background:var(--card);color:var(--mut);border-radius:999px;padding:8px 18px;font-size:14px;cursor:pointer;transition:color .15s,border-color .15s,background-color .15s}
+  .tab:hover{color:var(--text)}
+  .tab:focus-visible{outline:2px solid var(--mut);outline-offset:2px}
+  .tab.active{color:#fff;border-color:transparent;background:var(--grad)}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
   .panel{display:none}.panel.active{display:block}
   ol{margin:0 0 16px;padding-left:20px}
   li{margin-bottom:8px}
   .drag{text-align:center;margin:8px 0 4px}
-  .bookmarklet{display:inline-block;padding:14px 26px;border-radius:12px;color:#fff;text-decoration:none;font-weight:700;font-size:15px;background:linear-gradient(135deg,#f09433,#dc2743 55%,#bc1888);box-shadow:0 8px 24px rgba(220,39,67,.35)}
+  .bookmarklet{display:inline-block;padding:14px 26px;border-radius:12px;color:#fff;text-decoration:none;font-weight:700;font-size:15px;background:var(--grad);box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  .bookmarklet:focus-visible{outline:2px solid var(--mut);outline-offset:2px}
   textarea{width:100%;height:110px;background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;margin:10px 0}
-  button.copy{background:linear-gradient(135deg,#f09433,#dc2743 55%,#bc1888);border:none;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer}
+  button.copy{background:var(--grad);border:none;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer}
+  button.copy:focus-visible{outline:2px solid var(--mut);outline-offset:2px}
   .msg{color:var(--mut);font-size:13px;margin-left:10px}
   .ver{color:var(--mut);font-weight:400;font-size:13px}
   .note{font-size:12.5px;color:var(--mut);border-left:2px solid #4ade80;padding-left:10px}
   code{background:var(--card);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px}
 </style>
 </head>
-<body>
+<body data-accent="ig">
 <div class="wrap">
   <h1>UnMutual — Follower Insights</h1>
   <p class="sub">Pick a platform, install its bookmarklet, then run it on the platform while logged in.</p>
 
-  <div class="tabs">${tabs}</div>
+  <div class="tabs" role="tablist" aria-label="Platform">${tabs}</div>
   ${panels}
 
   <div class="card note">
@@ -236,6 +250,10 @@ function installerHtml(platforms) {
       var all = document.querySelectorAll(".tab");
       for (var j = 0; j < all.length; j++) all[j].classList.remove("active");
       this.classList.add("active");
+      for (var j2 = 0; j2 < all.length; j2++) {
+        all[j2].setAttribute("aria-selected", all[j2] === this ? "true" : "false");
+      }
+      document.body.setAttribute("data-accent", id);
       var panels = document.querySelectorAll(".panel");
       for (var k = 0; k < panels.length; k++) {
         panels[k].classList.toggle("active", panels[k].id === "tab-" + id);

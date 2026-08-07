@@ -65,7 +65,7 @@ unless a section says otherwise.
 | `CHANGELOG.md` | Release notes per platform version. |
 | `package.json` | Dev scripts only (`build` / `test` / `check` / `verify`). No runtime dependencies. |
 | `LICENSE` | MIT license (© 2026 Mamvd). |
-| `.gitignore` | Ignore list: build output, OS/editor junk. |
+| `.gitignore` | Ignore list: build output, OS/editor junk, and `.agents/` (local, third-party agent skills — personal tooling, never committed). |
 
 ## Commands
 
@@ -107,6 +107,10 @@ Run **all three** (`npm run verify`) after any change to a platform script. Run
      use their own `unmutual.<platform>.v2.*` namespace so they never collide with
      each other.
    - All persistence wrapped in try/catch (bookmarklets run on pages you don't control).
+5b. **Self-diagnosing errors.** Every network-error path must include the HTTP
+   status and a body snippet via the `describeResponse(status, text)` helper
+   (section 6, shared by both scripts) — never a bare "Unexpected response
+   shape". A real API change must be identifiable from the banner alone.
 6. **Minifier constraint.** `build.js` strips comments/whitespace and understands
    string/regex literals (regex detection is char- and keyword-based: after
    `([=,:;!&|?{` or after words like `return`/`typeof`/`case`). A regex literal

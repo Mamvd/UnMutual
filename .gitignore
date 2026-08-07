@@ -31,6 +31,9 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 
+# Local agent skills — third-party, reinstallable via the skill tool; not part of the product
+.agents/
+
 # Misc
 *.tgz
 *.zip

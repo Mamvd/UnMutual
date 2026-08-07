@@ -548,6 +548,18 @@ function t(name, cond, extra) {
     "detectThrottle ignores 200 ok",
     app.utils.detectThrottle(200, "{}", { users: [] }) === null,
   );
+  const th404 = app.utils.detectThrottle(404, "", null);
+  t(
+    "detectThrottle flags 404 (endpoint gone)",
+    th404 && th404.reason.indexOf("HTTP 404") !== -1,
+    JSON.stringify(th404),
+  );
+  const th500 = app.utils.detectThrottle(500, "", null);
+  t(
+    "detectThrottle flags 500",
+    th500 && th500.reason.indexOf("HTTP 500") !== -1,
+    JSON.stringify(th500),
+  );
 
   console.log("Test: scan (both lists)");
   fetchImpl = makeGoodFetch();
@@ -707,6 +719,44 @@ function t(name, cond, extra) {
   t(
     "non-resumable error recorded",
     S.history[0] && S.history[0].kind === "error",
+  );
+
+  console.log("Test: self-diagnosing errors");
+  // An API error envelope with an unknown code — previously fell through to the
+  // vague "Unexpected response shape"; now surfaces the real message + HTTP info.
+  fetchImpl = () =>
+    Promise.resolve({
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({ errors: [{ code: 50, message: "User not found." }] }),
+        ),
+    });
+  await app.scan();
+  const db = (registry.get("um-banner")._html || "").toLowerCase();
+  t(
+    "scan API error banner shows the real message",
+    db.indexOf("x api error") !== -1 && db.indexOf("user not found") !== -1,
+    db.slice(0, 200),
+  );
+  t(
+    "scan API error banner includes HTTP info",
+    db.indexOf("http 200") !== -1,
+    db.slice(0, 200),
+  );
+  // A 200 response with a completely unexpected shape — banner must carry the
+  // status + body snippet so the failure is identifiable without DevTools.
+  fetchImpl = () =>
+    Promise.resolve({
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ weird: "payload" })),
+    });
+  await app.scan();
+  const us = (registry.get("um-banner")._html || "").toLowerCase();
+  t(
+    "unexpected-shape banner includes HTTP status + body",
+    us.indexOf("http 200") !== -1 && us.indexOf("weird") !== -1,
+    us.slice(0, 200),
   );
 
   console.log("Test: cancel");
@@ -1084,6 +1134,7 @@ function t(name, cond, extra) {
   app.actions["modal-close"]();
 
   console.log("Test: unfollow doesn't consume a scan slot");
+  app.render(); // re-render the safety panel so it reflects current history
   const safetyHtml = registry.get("um-safety")._html;
   const scanKinds = S.history.filter(
     (h) =>

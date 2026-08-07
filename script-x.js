@@ -569,6 +569,18 @@
     return buildListUrl("followers", userId, cursor);
   }
 
+  /* Build a one-line, human-readable summary of a raw response so every error
+     banner carries the evidence needed to diagnose an API change (status +
+     first chunk of the body). Used on every error path — never guess twice. */
+  function describeResponse(status, text) {
+    var s = "HTTP " + status;
+    var body = String(text || "");
+    if (body.length > 200) body = body.slice(0, 200) + "…";
+    var flat = body.replace(/\s+/g, " ").trim();
+    if (flat) s += " · " + flat;
+    return s;
+  }
+
   function detectThrottle(status, text, json) {
     var msg = "";
     var code = null;
@@ -592,13 +604,10 @@
     if (code === 64 || code === 326) {
       return { reason: msg || "X says you need to log in again", resumable: false };
     }
-    if (status === 429 || status === 401 || status === 403) {
-      return {
-        reason: msg || "HTTP " + status,
-        retryAfter: json && json.retry_after ? Number(json.retry_after) : null,
-      };
-    }
-    if (status === 400) {
+    // Any non-2xx status is a pause (Resume is offered unless non-resumable).
+    // This also catches 404 (endpoint gone) and 500, which previously fell
+    // through to the vague "unexpected shape" message.
+    if (status >= 400) {
       return {
         reason: msg || "HTTP " + status,
         retryAfter: json && json.retry_after ? Number(json.retry_after) : null,
@@ -661,7 +670,10 @@
       eta = " · ~" + fmtDuration(rem) + " left";
     }
     var bar = document.getElementById("um-progressbar");
-    if (bar) bar.style.width = pct + "%";
+    if (bar) {
+      bar.style.width = pct + "%";
+      if (bar.setAttribute) bar.setAttribute("aria-valuenow", pct);
+    }
     var txt = document.getElementById("um-progress-text");
     if (txt)
       txt.textContent =
@@ -872,7 +884,9 @@
           if (!th && !json)
             th = {
               reason:
-                "X returned an HTML page instead of data (login wall or checkpoint?). Reload x.com and try again.",
+                "X returned an HTML page (HTTP " +
+                res.status +
+                ") instead of data (login wall or checkpoint?). Reload x.com and try again.",
               resumable: false,
             };
           if (th) {
@@ -881,9 +895,25 @@
           }
           var users = json && Array.isArray(json.users) ? json.users : null;
           if (!users) {
+            // Self-diagnosing: surface the exact status + body so a real API
+            // change is identifiable from the banner alone.
+            var snippet = describeResponse(res.status, res.text);
+            var apiErr =
+              json && Array.isArray(json.errors) && json.errors.length
+                ? json.errors[0]
+                : null;
+            var apiMsg =
+              apiErr && typeof apiErr === "object"
+                ? String(apiErr.message || apiErr.reason || "")
+                : "";
+            var resumable =
+              !apiMsg ||
+              !/login|authenticate|suspended|locked|challenge/i.test(apiMsg);
             S.throttle = {
-              reason: "Unexpected response shape from X.",
-              resumable: true,
+              reason: apiMsg
+                ? "X API error: " + apiMsg + " (" + snippet + ")"
+                : "Unexpected response shape from X (" + snippet + ").",
+              resumable: resumable,
             };
             return;
           }
@@ -944,9 +974,15 @@
             var waitTxt = S.throttle.retryAfter
               ? " X says to wait ~" + S.throttle.retryAfter + "s."
               : "";
-            var title = resumable
-              ? "X is rate-limiting the scan"
-              : "Scan could not continue";
+            var rateLike =
+              /rate[ _]?limit|too many|over capacity|forbidden|unauthorized|suspended|locked|challenge|feedback|request blocked/i.test(
+                S.throttle.reason,
+              );
+            var title = !resumable
+              ? "Scan could not continue"
+              : rateLike
+                ? "X is rate-limiting the scan"
+                : "Scan paused";
             var body =
               esc(S.throttle.reason) +
               waitTxt +
@@ -1091,7 +1127,7 @@
                 )
               : json && json.message
                 ? String(json.message)
-                : "HTTP " + res.status,
+                : describeResponse(res.status, res.text),
         };
       })
       .catch(function (err) {
@@ -1135,7 +1171,10 @@
         " left";
     }
     var bar = document.getElementById("um-progressbar");
-    if (bar) bar.style.width = pct + "%";
+    if (bar) {
+      bar.style.width = pct + "%";
+      if (bar.setAttribute) bar.setAttribute("aria-valuenow", pct);
+    }
     var txt = document.getElementById("um-progress-text");
     if (txt)
       txt.textContent = "Unfollowing " + S.unfollowIndex + " / " + total + eta;
@@ -1259,9 +1298,17 @@
             ? " X says to wait ~" + res.throttle.retryAfter + "s."
             : "";
           var resumable = res.throttle.resumable !== false;
+          var rateLike =
+            /rate[ _]?limit|too many|over capacity|forbidden|unauthorized|suspended|locked|challenge|feedback|request blocked/i.test(
+              res.throttle.reason,
+            );
           banner(
             "error",
-            "X is rate-limiting unfollowing",
+            !resumable
+              ? "Unfollowing could not continue"
+              : rateLike
+                ? "X is rate-limiting unfollowing"
+                : "Unfollowing paused",
             esc(res.throttle.reason) +
               waitTxt +
               (resumable
@@ -1558,7 +1605,7 @@
     ".ig-logo{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--ig-a1),var(--ig-a2) 55%,var(--ig-a3));box-shadow:0 4px 16px rgba(220,39,67,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px}" +
     ".ig-title strong{display:block;font-size:15px;letter-spacing:.2px}.ig-title span{display:block;font-size:12px;color:var(--ig-mut)}" +
     ".ig-header-right{display:flex;align-items:center;gap:10px}" +
-    ".ig-pill-header{padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--ig-line);background:var(--ig-card);color:var(--ig-mut);transition:all .2s}" +
+    ".ig-pill-header{padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--ig-line);background:var(--ig-card);color:var(--ig-mut);transition:background-color .2s,color .2s,border-color .2s}" +
     ".ig-pill-header-run{color:#fff;background:linear-gradient(135deg,var(--ig-a1),var(--ig-a2));border-color:transparent;animation:igpulse 1.4s ease-in-out infinite}" +
     ".ig-pill-header-ok{color:var(--ig-ok);border-color:rgba(74,222,128,.35)}" +
     ".ig-pill-header-warn{color:var(--ig-amber);border-color:rgba(251,191,36,.4)}" +
@@ -1585,14 +1632,14 @@
     ".ig-main{min-width:0}" +
     ".ig-toolbar{background:var(--ig-panel);border:1px solid var(--ig-line);border-radius:var(--ig-radius);padding:10px;margin-bottom:12px}" +
     ".ig-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}" +
-    ".ig-tab{border:1px solid var(--ig-line);background:var(--ig-card);color:var(--ig-mut);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer;transition:all .15s}" +
+    ".ig-tab{border:1px solid var(--ig-line);background:var(--ig-card);color:var(--ig-mut);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer;transition:color .15s,background-color .15s,border-color .15s}" +
     ".ig-tab:hover{color:var(--ig-text)}" +
     ".ig-tab-active{color:#fff;background:linear-gradient(135deg,var(--ig-a1),var(--ig-a2) 60%,var(--ig-a3));border-color:transparent}" +
     ".ig-tab-count{opacity:.75;font-size:11px;margin-left:4px}" +
     ".ig-toolbar-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}" +
     ".ig-search{flex:1;min-width:180px;background:var(--ig-card);border:1px solid var(--ig-line);color:var(--ig-text);border-radius:10px;padding:8px 12px;font-size:13px}" +
-    ".ig-search:focus{border-color:var(--ig-a2);outline:none}" +
-    ".ig-chip{border:1px solid var(--ig-line);background:var(--ig-card);color:var(--ig-mut);border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer;transition:all .15s}" +
+    ".ig-search:focus{border-color:var(--ig-a2)}.ig-search:focus-visible{outline:2px solid var(--ig-a2);outline-offset:2px}" +
+    ".ig-chip{border:1px solid var(--ig-line);background:var(--ig-card);color:var(--ig-mut);border-radius:999px;padding:5px 11px;font-size:12px;cursor:pointer;transition:color .15s,background-color .15s,border-color .15s}" +
     ".ig-chip:hover{color:var(--ig-text)}.ig-chip-on{color:var(--ig-text);border-color:var(--ig-a2);background:rgba(220,39,67,.14)}" +
     ".ig-label{font-size:11px;color:var(--ig-dim);margin-right:2px}" +
     ".ig-sel{display:flex;gap:6px;margin-left:auto}" +
@@ -1618,6 +1665,7 @@
     ".ig-actions{display:flex;gap:6px}" +
     ".ig-banner{margin-bottom:12px;border-radius:var(--ig-radius);padding:14px 16px;border:1px solid var(--ig-line);display:flex;align-items:center;gap:14px;flex-wrap:wrap;animation:igfade .3s ease}" +
     "@keyframes igfade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}" +
+    "@media (prefers-reduced-motion:reduce){.ig-app .ig-pill-header-run,.ig-app .ig-banner,.ig-app .ig-toast,.ig-app .ig-selbar,.ig-app .ig-modal{animation:none!important;transition:none!important}}" +
     ".ig-banner-info{background:rgba(56,189,248,.08);border-color:rgba(56,189,248,.35)}" +
     ".ig-banner-error{background:rgba(255,92,108,.08);border-color:rgba(255,92,108,.4)}" +
     ".ig-banner-text{flex:1;font-size:13px}" +
@@ -1637,7 +1685,7 @@
     ".ig-selbar-count{font-size:13px;color:var(--ig-mut)}.ig-selbar-count strong{color:var(--ig-text)}" +
     ".ig-selbar-actions{display:flex;gap:8px;flex-wrap:wrap}" +
     ".ig-modal-root{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}" +
-    ".ig-modal-backdrop{position:absolute;inset:0;background:rgba(4,4,8,.7);backdrop-filter:blur(4px)}" +
+    ".ig-modal-backdrop{position:absolute;inset:0;background:rgba(4,4,8,.7);backdrop-filter:blur(4px);border:0;padding:0;cursor:pointer}" +
     ".ig-modal{position:relative;background:var(--ig-panel);border:1px solid var(--ig-line);border-radius:18px;width:min(640px,94vw);max-height:84vh;display:flex;flex-direction:column;box-shadow:var(--ig-shadow);animation:igfade .25s ease}" +
     ".ig-modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--ig-line)}" +
     ".ig-modal-head h3{margin:0;font-size:16px}" +
@@ -1705,9 +1753,9 @@
     '<main class="ig-main">' +
     '<div id="um-banner"></div>' +
     '<div class="ig-progress" id="um-progress" style="display:none">' +
-    '<div class="ig-progress-track"><div class="ig-progress-fill" id="um-progressbar"></div></div>' +
+    '<div class="ig-progress-track"><div class="ig-progress-fill" id="um-progressbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>' +
     '<div class="ig-progress-meta">' +
-    '<span id="um-progress-text"></span>' +
+    '<span id="um-progress-text" aria-live="polite"></span>' +
     "<span>" +
     '<button class="ig-btn ig-btn-ghost" data-act="cancel" id="um-cancel-btn">Cancel</button>' +
     '<button class="ig-btn ig-btn-primary" data-act="resume" id="um-resume-btn" style="display:none">Resume</button>' +
@@ -1717,7 +1765,7 @@
     '<div class="ig-toolbar">' +
     '<div class="ig-tabs" id="um-tabs"></div>' +
     '<div class="ig-toolbar-row">' +
-    '<input id="um-search" class="ig-search" type="search" placeholder="Search name or @username…  (press / to focus)">' +
+    '<input id="um-search" class="ig-search" type="search" placeholder="Search name or @username…  (press / to focus)" aria-label="Search accounts" autocomplete="off" spellcheck="false">' +
     '<span class="ig-chips" id="um-chips"></span>' +
     '<span class="ig-sort" id="um-sort"></span>' +
     '<span class="ig-sel" id="um-sel"></span>' +
@@ -1733,7 +1781,7 @@
     "</footer>" +
     '<div class="ig-selbar" id="um-selbar"></div>' +
     '<div id="um-modal" class="ig-modal-root" style="display:none"></div>' +
-    '<div id="um-toasts" class="ig-toasts"></div>' +
+    '<div id="um-toasts" class="ig-toasts" role="status" aria-live="polite"></div>' +
     '<input type="file" id="ig-scan-file" accept=".json,application/json" style="display:none" data-act="scan-file">' +
     "</div>";
 
@@ -2128,7 +2176,7 @@
     t.innerHTML =
       "<span>" +
       esc(msg) +
-      '</span><button class="ig-toast-x" data-act="toast-close">×</button>';
+      '</span><button class="ig-toast-x" data-act="toast-close" aria-label="Dismiss notification">×</button>';
     root.appendChild(t);
     setTimeout(function () {
       if (t.parentNode) t.parentNode.removeChild(t);
@@ -2155,13 +2203,14 @@
   function openModal(title, bodyHtml, footerHtml) {
     var root = document.getElementById("um-modal");
     if (!root) return;
+    S._lastFocus = document.activeElement || null;
     root.style.display = "flex";
     root.innerHTML =
-      '<div class="ig-modal-backdrop" data-act="modal-close"></div>' +
-      '<div class="ig-modal">' +
-      '<div class="ig-modal-head"><h3>' +
+      '<button type="button" class="ig-modal-backdrop" data-act="modal-close" aria-label="Close dialog" tabindex="-1"></button>' +
+      '<div class="ig-modal" role="dialog" aria-modal="true" aria-labelledby="um-modal-title">' +
+      '<div class="ig-modal-head"><h3 id="um-modal-title">' +
       esc(title) +
-      '</h3><button class="ig-btn ig-btn-ghost" data-act="modal-close">×</button></div>' +
+      '</h3><button class="ig-btn ig-btn-ghost" data-act="modal-close" aria-label="Close dialog">×</button></div>' +
       '<div class="ig-modal-body">' +
       bodyHtml +
       "</div>" +
@@ -2169,11 +2218,24 @@
         ? '<div class="ig-modal-foot">' + footerHtml + "</div>"
         : "") +
       "</div>";
+    if (root.querySelectorAll) {
+      var first = root.querySelectorAll(
+        ".ig-modal button, .ig-modal input, .ig-modal select, .ig-modal textarea, .ig-modal a[href]",
+      );
+      if (first && first.length && first[0].focus) first[0].focus();
+    }
   }
 
   function closeModal() {
     var r = document.getElementById("um-modal");
     if (r) r.style.display = "none";
+    var f = S._lastFocus;
+    S._lastFocus = null;
+    if (f && f.focus) {
+      try {
+        f.focus();
+      } catch (e) {}
+    }
   }
 
   function settingsBody() {
@@ -2670,6 +2732,31 @@
       var t = e.target;
       if (e.key === "Escape") {
         app.actions["modal-close"]();
+        return;
+      }
+      if (e.key === "Tab") {
+        var m = document.getElementById("um-modal");
+        if (
+          m &&
+          m.style &&
+          m.style.display !== "none" &&
+          typeof m.querySelectorAll === "function"
+        ) {
+          var foc = m.querySelectorAll(
+            ".ig-modal button, .ig-modal input, .ig-modal select, .ig-modal textarea, .ig-modal a[href]",
+          );
+          if (foc && foc.length) {
+            var firstF = foc[0];
+            var lastF = foc[foc.length - 1];
+            if (e.shiftKey && (t === firstF || t === m)) {
+              e.preventDefault();
+              lastF.focus();
+            } else if (!e.shiftKey && (t === lastF || t === m)) {
+              e.preventDefault();
+              firstF.focus();
+            }
+          }
+        }
         return;
       }
       if (
