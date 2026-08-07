@@ -6,6 +6,8 @@
 
 Everything runs **100% locally in your browser**: no servers, no accounts, no third parties. The only network traffic is your own read-only requests to the platform, plus the unfollow requests you personally confirm.
 
+<p align="center"><img src="assets/og-image.png" alt="UnMutual — follower insights bookmarklets for Instagram and X" width="640"></p>
+
 > ⚠️ **Terms of Service.** Any automation on a social platform — even read-only scans — can violate the platform's ToS and trigger temporary action blocks. UnMutual is deliberately conservative: capped, self-pausing, and it never unfollows without your explicit confirmation. **Use at your own risk.**
 
 ---
@@ -120,8 +122,10 @@ Defaults are deliberately conservative; all pacing values are tunable in **Setti
 | `build.js` | Minifies each platform script (comments/whitespace only) → URL-encodes it → writes `bookmarklet-ig.txt` + `bookmarklet-x.txt` + one merged `index.html` installer. |
 | `test-ig.js` | Headless smoke tests for `script-ig.js` (stubbed DOM/fetch/localStorage). Also runs the minified build end-to-end. |
 | `test-x.js` | Headless smoke tests for `script-x.js` — same coverage with X-specific API fixtures. |
-| `index.html` | Generated installer page (platform switcher, drag-to-bookmarks). Committed so users can install without building. |
+| `index.html` | Generated installer page (platform switcher, drag-to-bookmarks, Open Graph / Twitter Card / JSON-LD head). Committed so users can install without building. |
 | `bookmarklet-ig.txt` / `bookmarklet-x.txt` | Generated, git-ignored, regenerable — the paste-ready `javascript:` URLs. Never hand-edit. |
+| `tools/og-image.js` | Zero-dependency generator for the installer's Open Graph / Twitter card image — pure Node (built-in `zlib` only), no npm packages. Run `node tools/og-image.js` to (re)generate. |
+| `assets/og-image.png` | Generated 1200×630 card image (dark gradient + star mark) referenced by `index.html`'s `og:image` / `twitter:image`. Committed, regenerable. |
 | `agent.md` | Working guidance for AI agents and contributors (architecture map, hard constraints, conventions). |
 | `package.json` | Dev scripts only (`build` / `test` / `check` / `verify`). No runtime dependencies. |
 | `LICENSE` | MIT license (© 2026 Mamvd). |
@@ -140,6 +144,7 @@ Notes for contributors:
 
 - **CI:** GitHub Actions runs `npm run verify` on every push and pull request (`.github/workflows/verify.yml`), and fails if the committed `index.html` has drifted from the source scripts.
 - The `bookmarklet-*.txt` and `index.html` files are **generated** — edit the platform script, then run `npm run build`.
+- The installer's Open Graph / Twitter card image (`assets/og-image.png`) is generated too — after tweaking the design in `tools/og-image.js`, regenerate it with `node tools/og-image.js`.
 - `npm test` executes the minified build output in a fresh sandbox and runs a scan **and** an unfollow, so any semantic break in the minifier is caught automatically.
 - If you add a regex containing an unescaped `//` or `/*` to a platform script, check the minifier in `build.js`.
 - Full architecture map, naming conventions and hard constraints live in [`agent.md`](agent.md) — read it before editing anything.

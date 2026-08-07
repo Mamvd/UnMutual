@@ -56,7 +56,9 @@ unless a section says otherwise.
 |---|---|
 | `script-ig.js` | **Instagram platform script** — a single IIFE, vanilla JS, zero dependencies. |
 | `script-x.js` | **X (Twitter) platform script** — sibling of `script-ig.js`: same engine, platform-specific API layer (section 6), auth cookies and boot guard (section 15). |
-| `build.js` | Minifies each platform script (comments/whitespace only) → URL-encodes it → writes `bookmarklet-ig.txt` + `bookmarklet-x.txt` + one merged `index.html` installer (platform tabs). |
+| `build.js` | Minifies each platform script (comments/whitespace only) → URL-encodes it → writes `bookmarklet-ig.txt` + `bookmarklet-x.txt` + one merged `index.html` installer (platform tabs, full Open Graph / Twitter Card / JSON-LD head). |
+| `tools/og-image.js` | Zero-dependency generator for `assets/og-image.png` (the OG/Twitter card image) — pure Node, built-in zlib only. Run with `node tools/og-image.js` after changing the design. |
+| `assets/og-image.png` | Generated 1200×630 card image referenced by the installer's `og:image` / `twitter:image`. Committed, regenerable. |
 | `test-ig.js` | Headless smoke tests for `script-ig.js` (stubbed DOM/fetch/localStorage). |
 | `test-x.js` | Headless smoke tests for `script-x.js` — same coverage, X-specific REST fixtures. |
 | `bookmarklet-ig.txt` / `bookmarklet-x.txt` | Generated — the paste-ready `javascript:` URLs. Never hand-edit. Git-ignored (regenerate with `npm run build`); `index.html` is the committed artifact. |

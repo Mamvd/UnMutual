@@ -1623,7 +1623,7 @@
     ".ig-safety-note{margin-top:10px;font-size:11.5px;color:var(--ig-mut);border-left:2px solid var(--ig-ok);padding-left:8px}" +
     ".ig-side-actions{display:flex;flex-direction:column;gap:8px}" +
     ".ig-btn{appearance:none;border:1px solid var(--ig-line);background:var(--ig-card);color:var(--ig-text);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:transform .12s,box-shadow .12s,background .12s,border-color .12s;white-space:nowrap}" +
-    ".ig-btn:hover{transform:translateY(-1px);border-color:var(--ig-mut);box-shadow:0 4px 14px rgba(0,0,0,.35)}.ig-btn:active{transform:translateY(0)}" +
+    ".ig-btn:hover{border-color:var(--ig-mut);background:var(--ig-card2)}.ig-btn:active{background:var(--ig-card)}" +
     ".ig-btn-primary{background:linear-gradient(135deg,var(--ig-a1),var(--ig-a2) 55%,var(--ig-a3));border-color:transparent;color:#fff}" +
     ".ig-btn-danger{color:var(--ig-danger);border-color:rgba(255,92,108,.4)}.ig-btn-danger:hover{border-color:var(--ig-danger)}" +
     ".ig-btn-ghost{background:transparent}" +
@@ -1671,7 +1671,7 @@
     ".ig-banner-text{flex:1;font-size:13px}" +
     ".ig-banner-actions{display:flex;gap:8px}" +
     ".ig-banner-hero{background:radial-gradient(120% 140% at 10% 0%,rgba(220,39,67,.16),transparent 55%),linear-gradient(180deg,var(--ig-card),var(--ig-panel));border-color:var(--ig-line);display:flex;gap:20px;align-items:center}" +
-    ".ig-hero-icon{font-size:44px;line-height:1;flex:none}" +
+    ".ig-hero-icon{width:44px;height:44px;flex:none;color:var(--ig-a2)}" +
     ".ig-hero-text h2{margin:0 0 6px;font-size:20px}" +
     ".ig-hero-text p{margin:0 0 8px;color:var(--ig-mut);max-width:640px}" +
     ".ig-hero-hints kbd{background:var(--ig-card2);border:1px solid var(--ig-line);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:11px;color:var(--ig-text);font-family:inherit}" +
@@ -1700,7 +1700,7 @@
     ".ig-h-head,.ig-h-row{display:grid;grid-template-columns:1.6fr .8fr .7fr .7fr .9fr;gap:8px;align-items:center;font-size:12.5px}" +
     ".ig-h-head{color:var(--ig-dim);text-transform:uppercase;font-size:10.5px;letter-spacing:.8px;padding:6px 2px;border-bottom:1px solid var(--ig-line)}" +
     ".ig-h-row{padding:8px 2px;border-bottom:1px solid var(--ig-line)}" +
-    ".ig-h-kind{font-weight:600}.ig-h-done{color:var(--ig-ok)}.ig-h-cancelled{color:var(--ig-amber)}.ig-h-capped{color:var(--ig-amber)}.ig-h-throttled{color:var(--ig-danger)}.ig-h-error{color:var(--ig-danger)}.ig-h-unfollow{color:var(--ig-accent)}.ig-h-sum{color:var(--ig-muted)}" +
+    ".ig-h-kind{font-weight:600}.ig-h-done{color:var(--ig-ok)}.ig-h-cancelled{color:var(--ig-amber)}.ig-h-capped{color:var(--ig-amber)}.ig-h-throttled{color:var(--ig-danger)}.ig-h-error{color:var(--ig-danger)}.ig-h-unfollow{color:var(--ig-a2)}.ig-h-sum{color:var(--ig-dim)}" +
     ".ig-toasts{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-direction:column;gap:8px;max-width:360px}" +
     ".ig-toast{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;background:var(--ig-card2);border:1px solid var(--ig-line);border-left:3px solid var(--ig-info);color:var(--ig-text);border-radius:10px;padding:10px 12px;font-size:13px;box-shadow:var(--ig-shadow);animation:igfade .25s ease}" +
     ".ig-toast-success{border-left-color:var(--ig-ok)}.ig-toast-error{border-left-color:var(--ig-danger)}.ig-toast-warning{border-left-color:var(--ig-amber)}" +
@@ -2137,7 +2137,7 @@
     }
     el.innerHTML =
       '<div class="ig-banner ig-banner-hero">' +
-      '<div class="ig-hero-icon">✦</div>' +
+      '<div class="ig-hero-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 0l2.6 9.4L24 12l-9.4 2.6L12 24l-2.6-9.4L0 12l9.4-2.6z"/></svg></div>' +
       '<div class="ig-hero-text"><h2>See who doesn’t follow you back</h2>' +
       "<p>Scans your <strong>following list</strong> and your <strong>followers list</strong> read-only — then flags accounts that don’t follow you back, accounts you don’t follow back, and your mutuals. You can also unfollow accounts you pick — with human-like pacing and daily caps. Nothing leaves your browser except your own X requests.</p>" +
       '<p class="ig-hero-hints">Shortcuts: <kbd>s</kbd> or <kbd>/</kbd> search · <kbd>1</kbd>–<kbd>4</kbd> tabs · <kbd>a</kbd>/<kbd>n</kbd>/<kbd>i</kbd> select all / none / invert · <kbd>Esc</kbd> close</p></div>' +

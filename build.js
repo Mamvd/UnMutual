@@ -16,6 +16,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const PKG = require("./package.json");
 
 const ROOT = __dirname;
 
@@ -190,13 +191,44 @@ function installerHtml(platforms) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Install the UnMutual bookmarklets — follower insights for Instagram and X (Twitter). Read-only local scans, confirm-first unfollows, no third parties.">
 <meta name="theme-color" content="#0a0a0f">
-<meta property="og:type" content="website">
-<meta property="og:title" content="UnMutual — Follower Insights (Instagram & X)">
-<meta property="og:description" content="Zero-dependency bookmarklets that scan your following/followers lists and flag non-followers. 100% local, confirm-first unfollows.">
-<meta property="og:url" content="https://github.com/Mamvd/UnMutual">
 <link rel="canonical" href="https://github.com/Mamvd/UnMutual">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%A6%3C/text%3E%3C/svg%3E">
 <title>UnMutual — Install</title>
+
+<!-- Open Graph -->
+<meta property="og:site_name" content="UnMutual">
+<meta property="og:locale" content="en_US">
+<meta property="og:type" content="website">
+<meta property="og:title" content="UnMutual — Follower Insights for Instagram &amp; X">
+<meta property="og:description" content="Zero-dependency bookmarklets that scan your following/followers lists and flag non-followers. 100% local, confirm-first unfollows.">
+<meta property="og:url" content="https://github.com/Mamvd/UnMutual">
+<meta property="og:image" content="https://raw.githubusercontent.com/Mamvd/UnMutual/main/assets/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="UnMutual logo mark — follower insights bookmarklets for Instagram and X">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="UnMutual — Follower Insights for Instagram &amp; X">
+<meta name="twitter:description" content="Zero-dependency bookmarklets that scan your following/followers lists and flag non-followers. 100% local, confirm-first unfollows.">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/Mamvd/UnMutual/main/assets/og-image.png">
+<meta name="twitter:image:alt" content="UnMutual logo mark — follower insights bookmarklets for Instagram and X">
+
+<!-- Structured data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "UnMutual",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Any",
+  "description": "Zero-dependency bookmarklets that scan your Instagram and X (Twitter) following/followers lists and flag accounts that do not follow you back. 100% local, confirm-first unfollows.",
+  "url": "https://github.com/Mamvd/UnMutual",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "softwareVersion": "${PKG.version}"
+}
+</script>
 <style>
   :root{--bg:#0a0a0f;--panel:#12121a;--card:#171722;--line:#26263a;--text:#e9e9f2;--mut:#8b8ba5;--grad-ig:linear-gradient(135deg,#f09433,#dc2743 55%,#bc1888);--grad-x:linear-gradient(135deg,#1d9bf0,#0f90e8 55%,#7856ff)}
   *{box-sizing:border-box}
